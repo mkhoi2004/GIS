@@ -8,7 +8,7 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Kết nối MongoDB
-client = MongoClient('mongodb://localhost:27017/')
+client = MongoClient('mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/')
 db = client['GIS']
 collection = db['DataAQI']
 
