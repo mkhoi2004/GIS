@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đánh giá sức khỏe hô hấp</title>
+    <link rel="stylesheet" href="/static/css/health_valuation.css">
+    <link rel="icon" href="/static/favicon.ico">
+</head>
+<body>
+    <div class="toolbar">
+        <a href="/index">Bản đồ AQI</a>
+    </div>
+    <div class="container">
+       
+        
+        <div class="title">Đánh giá sức khỏe hô hấp</div>
+        <div class="input-section">
+            <label>Chọn thành phố: </label>
+            <select id="citySelect">
+                <option value="">-- Chọn thành phố --</option>
+            </select>
+            <button onclick="calculateHRI()">Kiểm tra</button>
+        </div>
+        <div class="result" id="hriResult"></div>
+        
+        <div class="info">
+            <h2><b>Tìm hiểu về chỉ số chất lượng không khí AQI</b></h2>
+            <h3><b>Chỉ số chất lượng không khí AQI là gì?</b></h3>
+            <p>
+                <span style="font-weight: 400;">
+                    <span style="color: #0000ff;">
+                        <strong>Chỉ số chất lượng không khí (AQI)</strong>
+                    </span>
+                    là một thước đo đơn giản hóa mức độ ô nhiễm không khí hiện tại hoặc dự báo mức độ ô nhiễm không khí trong tương lai. AQI được tính toán dựa trên nồng độ của các chất ô nhiễm không khí chính. Bao gồm: PM2.5, PM10, O3, NO2, SO2 và CO. Mỗi chất ô nhiễm có một phạm vi AQI tương ứng với mức độ ảnh hưởng đến sức khỏe của con người. AQI càng cao, nguy cơ sức khỏe cộng đồng càng tăng.
+                </span>
+            </p>
+            <p>
+                <span style="font-weight: 400;">Mục đích của AQI là cung cấp cho người dùng thông tin về chất lượng không khí tại các khu vực khác nhau, giúp bạn có thể phòng tránh hoặc giảm thiểu các tác hại của không khí ô nhiễm. AQI cũng là một công cụ quản lý môi trường, giúp các nhà chức trách có thể đưa ra các biện pháp kiểm soát và cải thiện chất lượng không khí</span>
+            </p>
+            <h3><b>Các mức độ AQI:</b></h3>
+            <p>
+                <img decoding="async" class="aligncenter" src="https://airproce.com.vn/wp-content/uploads/2023/08/o-nhiem-khong-khi-anh-huong-den-nao-bo-con-nguoi-nhu-the-nao-2.jpg" alt="thực trạng ô nhiễm không khí ở Việt Nam" width="600" height="423">
+            </p>
+            <p>
+                <span style="font-weight: 400;">
+                    Chỉ số AQI được chia thành
+                    <span style="color: #0000ff;">
+                        <strong>6 mức, từ 0 đến 500</strong>
+                    </span>
+                    , với các mã màu và mô tả tương ứng. Các mức độ AQI bao gồm:
+                </span>
+            </p>
+            <ul>
+                <li><span style="font-weight: 400;"><strong>Tốt (0-50):</strong> Màu xanh lá. Không khí sạch, ít ảnh hưởng đến sức khỏe.</span></li>
+                <li><span style="font-weight: 400;"><strong>Trung bình (51-100):</strong> Màu vàng. Không khí có chất lượng trung bình, có thể gây ra một số triệu chứng cho nhóm nhạy cảm.</span></li>
+                <li><span style="font-weight: 400;"><strong>Không tốt cho sức khỏe nhóm nhạy cảm (101-150):</strong> Màu da cam. Không khí có chất lượng kém, có thể gây ra các vấn đề về hô hấp cho nhóm nhạy cảm.</span></li>
+                <li><span style="font-weight: 400;"><strong>Không tốt cho sức khỏe (151-200):</strong> Màu đỏ. Không khí có chất lượng xấu, có thể gây ra các vấn đề về sức khỏe cho mọi người.</span></li>
+                <li><span style="font-weight: 400;"><strong>Rất không tốt cho sức khỏe (201-300):</strong> Màu tím. Không khí có chất lượng rất xấu, có thể gây ra các vấn đề nghiêm trọng về sức khỏe cho mọi người.</span></li>
+                <li><span style="font-weight: 400;"><strong>Nguy hiểm (301-500):</strong> Màu nâu. Không khí có chất lượng nguy hiểm, có thể gây ra các vấn đề cấp tính về sức khỏe cho mọi người.</span></li>
+            </ul>
+            <div class="box box-text-bottom box-blog-post has-hover">
+                <div class="box-text text-left">
+                    <div class="box-text-inner blog-post-inner">
+                        <span style="color: #0000ff;">
+                            <em>
+                                <strong>
+                                    &gt;&gt;&gt;Xem ngay: <a style="color: #0000ff;" href="https://airproce.com.vn/cach-tinh-chi-so-aqi-so-sanh-tieu-chuan-aqi-cua-trung-quoc-va-my/">Cách tính chỉ số AQI? So sánh tiêu chuẩn AQI của Trung Quốc và Mỹ?</a>
+                                </strong>
+                            </em>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <h2>
+                <span class="ez-toc-section" id="Cac_yeu_to_anh_huong_den_AQI"></span>
+                <b>Các yếu tố ảnh hưởng đến AQI </b>
+                <span class="ez-toc-section-end"></span>
+            </h2>
+            <p>
+                <span style="font-weight: 400;">AQI không chỉ được tính dựa trên nồng độ của các chất PM2.5, PM10, O3, NO2, SO2 và CO 1 mà còn phụ thuộc vào nhiều yếu tố khác, bao gồm: </span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Cac_nguon_gay_o_nhiem"></span>
+                <strong>Các nguồn gây ô nhiễm:</strong>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <img decoding="async"  class="wp-image-3584 size-full aligncenter" src="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-nguyen-nhan-gay-o-nhiem-khong-khi-va-hau-qua-5.jpg" alt="ô nhiễm không khí do khí thải từ các nhà máy" width="600" height="400" srcset="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-nguyen-nhan-gay-o-nhiem-khong-khi-va-hau-qua-5.jpg 600w, https://airproce.com.vn/wp-content/uploads/2023/08/nhung-nguyen-nhan-gay-o-nhiem-khong-khi-va-hau-qua-5-300x200.jpg 300w" sizes="(max-width: 600px) 100vw, 600px" title="Những điều bạn cần biết về chỉ số chất lượng không khí AQI 3">
+            </p>
+            <p>
+                <span style="font-weight: 400;">Các hoạt động như giao thông, công nghiệp, nông nghiệp, đốt rác, cháy rừng, … đều có thể thải ra các chất gây ô nhiễm vào không khí. Các nguồn gây ô nhiễm có thể tăng hoặc giảm tùy theo thời gian, địa điểm và mùa vụ.</span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Thoi_tiet"></span>
+                <strong>Thời tiết:</strong>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <span style="font-weight: 400;">Thời tiết có ảnh hưởng đến sự phân bố và pha loãng của các chất ô nhiễm không khí. Các yếu tố như nhiệt độ, độ ẩm, gió, áp suất không khí, mưa, … đều có thể làm tăng hoặc giảm AQI. Ví dụ: Khi trời nắng và nóng, ozone có thể tăng lên do phản ứng của ánh sáng mặt trời với các chất hữu cơ bay hơi. Khi trời rét và ẩm, bụi mịn PM2.5 có thể tăng lên do sự kết tụ của các hạt nhỏ.</span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Dia_hinh"></span>
+                <strong>Địa hình:</strong>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <span style="font-weight: 400;">Địa hình cũng có ảnh hưởng đến sự lưu thông và phân tán của không khí. Các khu vực có địa hình cao hoặc bị bao quanh bởi các ngọn núi có thể bị ảnh hưởng bởi hiện tượng trầm tích không khí (inversion), khi một lớp không khí lạnh bị kẹt dưới một lớp không khí ấm hơn. Điều này làm giảm sự trao đổi và pha loãng của các chất ô nhiễm không khí và làm tăng AQI. </span>
+            </p>
+            <p>
+                <span style="color: #0000ff;">
+                    <em>
+                        <strong>
+                            &gt;&gt;&gt;Xem thêm: 
+                            <a style="color: #0000ff;" href="https://airproce.com.vn/nhung-nguyen-nhan-gay-o-nhiem-khong-khi-va-hau-qua/">
+                                <span style="font-size: 14.4px;">Những nguyên nhân gây ô nhiễm không khí và hậu quả</span>
+                            </a>
+                        </strong>
+                    </em>
+                </span>
+            </p>
+            <h2>
+                <span class="ez-toc-section" id="Cach_do_va_theo_doi_chi_so_chat_luong_khong_khi_AQI"></span>
+                <b>Cách đo và theo dõi chỉ số chất lượng không khí AQI: </b>
+                <span class="ez-toc-section-end"></span>
+            </h2>
+            <h3>
+                <span class="ez-toc-section" id="May_do_AQI"></span>
+                <b>Máy đo AQI:</b>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <img decoding="async"  class="aligncenter wp-image-3701" src="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-1.jpg" alt="máy đo chỉ số chất lượng không khí " width="600" height="347" srcset="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-1.jpg 697w, https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-1-300x173.jpg 300w" sizes="(max-width: 600px) 100vw, 600px" title="Những điều bạn cần biết về chỉ số chất lượng không khí AQI 4">
+            </p>
+            <p>
+                <span style="font-weight: 400;">Đây là các thiết bị nhỏ gọn có thể đo nồng độ của một hoặc nhiều chất ô nhiễm không khí và hiển thị số AQI tương ứng. Bạn có thể mua máy đo AQI và sử dụng trong nhà hoặc mang theo khi ra ngoài. Một số máy đo AQI cũng có thể kết nối với điện thoại thông minh hoặc internet để gửi dữ liệu cho các ứng dụng hoặc trang web về chất lượng không khí. </span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Tram_quan_trac_khong_khi"></span>
+                <b>Trạm quan trắc không khí:</b>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <span style="font-weight: 400;">Đây là các thiết bị lớn hơn và chuyên nghiệp hơn, được lắp đặt tại các vị trí cố định để giám sát liên tục các chỉ tiêu chất lượng không khí. Các trạm quan trắc không khí có thể do các cơ quan chính phủ, tổ chức phi lợi nhuận, trường học hoặc cá nhân vận hành. Các dữ liệu từ các trạm quan trắc không khí được gửi về các cơ sở dữ liệu trung tâm và được công bố qua các phương tiện truyền thông hoặc internet.</span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Ung_dung_di_dong_ve_chat_luong_khong_khi"></span>
+                <b>Ứng dụng di động về chất lượng không khí:</b>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <img decoding="async"  class="wp-image-3702 aligncenter" src="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-2.jpg" alt="ứng dụng đo chỉ chất lượng không khí " width="600" height="349" srcset="https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-2.jpg 760w, https://airproce.com.vn/wp-content/uploads/2023/08/nhung-dieu-ban-can-biet-ve-chi-so-chat-luong-khong-khi-aqi-2-300x174.jpg 300w" sizes="(max-width: 600px) 100vw, 600px" title="Những điều bạn cần biết về chỉ số chất lượng không khí AQI 5">
+            </p>
+            <p>
+                <span style="font-weight: 400;">Đây là các ứng dụng có thể tải về và cài đặt trên điện thoại thông minh để theo dõi AQI mọi lúc mọi nơi. Các ứng dụng này cũng sử dụng các nguồn dữ liệu từ các trạm quan trắc không khí hoặc các mô hình dự báo để cập nhật AQI của các khu vực bạn quan tâm. Các ứng dụng này cũng có thể gửi cho bạn các thông báo, lời khuyên và tin tức về chất lượng không khí. Một số ứng dụng di động về chất lượng không khí phổ biến là AirVisual, PAMAir, Plume Air Report, … </span>
+            </p>
+            <h3>
+                <span class="ez-toc-section" id="Website_ve_chat_luong_khong_khi"></span>
+                <b>Website về chất lượng không khí:</b>
+                <span class="ez-toc-section-end"></span>
+            </h3>
+            <p>
+                <span style="font-weight: 400;">Đây là các trang web cung cấp thông tin về AQI của các khu vực khác nhau trên thế giới, dựa trên các nguồn dữ liệu từ các trạm quan trắc không khí hoặc các mô hình dự báo. Bạn có thể truy cập các website này để xem AQI hiện tại hoặc trong quá khứ của một địa điểm cụ thể, hoặc xem xếp hạng AQI của các thành phố và quốc gia.</span>
+            </p>
+            <p>
+                <span style="color: #0000ff;">
+                    <em>
+                        <strong>
+                            &gt;&gt;&gt;Xem ngay: <a style="color: #0000ff;" href="https://khisach.vn/kiem-tra-chat-luong-khong-khi/" target="_blank" rel="noopener">Dịch vụ kiểm tra chất lượng không khí tại nhà</a>
+                        </strong>
+                    </em>
+                </span>
+            </p>
+            <h2>
+                <span class="ez-toc-section" id="Cach_bao_ve_suc_khoe_khi_AQI_cao"></span>
+                <b>Cách bảo vệ sức khỏe khi AQI cao </b>
+                <span class="ez-toc-section-end"></span>
+            </h2>
+            <p>
+                <img decoding="async"  class="wp-image-3512 aligncenter" src="https://airproce.com.vn/wp-content/uploads/2023/08/o-nhiem-khong-khi-anh-huong-den-nao-bo-con-nguoi-nhu-the-nao-5-scaled-e1692611245783.jpg" alt="máy cấp khí tươi giúp nâng cao chất lượng không khí" width="600" height="400" srcset="https://airproce.com.vn/wp-content/uploads/2023/08/o-nhiem-khong-khi-anh-huong-den-nao-bo-con-nguoi-nhu-the-nao-5-scaled-e1692611245783.jpg 650w, https://airproce.com.vn/wp-content/uploads/2023/08/o-nhiem-khong-khi-anh-huong-den-nao-bo-con-nguoi-nhu-the-nao-5-scaled-e1692611245783-300x200.jpg 300w" sizes="(max-width: 600px) 100vw, 600px" title="Những điều bạn cần biết về chỉ số chất lượng không khí AQI 6">
+            </p>
+            <p>
+                <span style="font-weight: 400;">Một số cách bảo vệ sức khỏe khi chỉ số chất lượng không khí AQI cao bạn có thể tham khảo: </span>
+            </p>
+            <ul>
+                <li>
+                    <span style="font-weight: 400;">Khi không khí đạt đến mức cảnh báo da cam, đỏ thì bạn nên ở trong nhà, hạn chế ra bên ngoài. Không khí ngoài trời lúc này khá nguy hiểm, có thể gây hại cho phổi, tim, hen phế quản và nhiều vấn để sức khỏe khác. </span>
+                </li>
+                <li>
+                    <span style="font-weight: 400;">Nên mang khẩu trang chống bụi, kính mắt và bảo vệ cơ thể kỹ càng</span>
+                </li>
+                <li>
+                    <span style="font-weight: 400;">Nếu bạn lái xe hơi, bạn nên dùng máy lọc không khí nhỏ trong xe.</span>
+                </li>
+                <li>
+                    <span style="font-weight: 400;">Bạn nên mua và lắp máy lọc không khí ở nhà, đặc biệt là ở các phòng chung và phòng ngủ. Bạn cũng nên lắp các miếng chắn bụi ô nhiễm ở các cửa sổ, quạt hút nếu không khí xung quanh bạn thường xuyên kém chất lượng</span>
+                </li>
+                <li>
+                    <span style="font-weight: 400;">Chỉ nên tập thể dục vào buổi sáng sớm hoặc buổi chiều tối khi trời đã mát để tránh hít thở không khí ô nhiễm. Trong những ngày không khí xấu, bạn chỉ nên tập trong phòng tập và ngừng các hoạt động thể chất ngoài trời.</span>
+                </li>
+                <li>
+                    <span style="font-weight: 400;">Khói thuốc lá là một trong những nguyên nhân chính gây ra ô nhiễm không khí. Do đó, bạn nên né tránh những nơi có khói thuốc lá và cố gắng bỏ thuốc lá nếu có thể.</span>
+                </li>
+            </ul>
+            <p>
+                <em style="color: #0000ff; font-size: 14.4px;">
+                    <strong>
+                        &gt;&gt;&gt;Xem ngay:
+                        <a style="color: #0000ff;" href="https://airproce.com.vn/o-nhiem-khong-khi-anh-huong-den-nao-bo-con-nguoi-nhu-the-nao/">
+                            <span style="font-size: 14.4px;">Ô nhiễm không khí ảnh hưởng đến não bộ con người như thế nào?</span>
+                        </a>
+                    </strong>
+                </em>
+            </p>
+          
+        </div>
+    </div>
+
+    <script src="/static/js/health_valuation.js"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+body, html {
+    height: 100%;
+    margin: 0;
+    font-family: 'Arial', sans-serif;
+    background-color: #f4f4f9;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    transition: filter 0.3s ease;
+}
+
+#search-container {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: linear-gradient(135deg, #ffffff, #e8ecef);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    width: 200px;
+    border: 2px solid #007bff;
+    transition: all 0.3s ease;
+}
+
+#search-container:hover {
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+    transform: translateX(-50%) scale(1.02);
+}
+
+#search-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+#search-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+#search-results {
+    list-style: none;
+    margin: 4px 0 0 0;
+    padding: 0;
+    max-height: 100px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-top: none;
+    background: #fff;
+    font-size: 12px;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#search-results li {
+    padding: 4px 6px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+#search-results li:hover {
+    background: #e6f0fa;
+    transform: translateX(3px);
+}
+
+.leaflet-popup-content-wrapper {
+    background: linear-gradient(135deg, #ffffff, #f8f9fa);
+    border-radius: 8px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    padding: 10px;
+    max-width: 300px;
+}
+
+.leaflet-popup-tip {
+    background: #ffffff;
+}
+
+.leaflet-marker-icon {
+    transition: transform 0.3s ease;
+}
+
+.leaflet-marker-icon:hover {
+    transform: scale(1.2);
+}
+
+#map:hover {
+    filter: brightness(1.05);
+}
+
+.popup-content {
+    font-size: 12px;
+    color: #333;
+}
+
+.popup-content h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #333;
+    font-weight: bold;
+}
+
+.aqi-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.aqi-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ff7e00; /* Màu cam giống trong hình */
+    margin-right: 10px;
+}
+
+.aqi-status {
+    font-size: 14px;
+    color: #666;
+}
+
+.update-time {
+    font-size: 10px;
+    color: #999;
+    margin-bottom: 10px;
+}
+
+.pollutants {
+    margin-bottom: 10px;
+}
+
+.pollutant {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+.pollutant:last-child {
+    border-bottom: none;
+}
+
+.pollutant span:first-child {
+    font-weight: bold;
+    color: #555;
+}
+
+.pollutant span:last-child {
+    color: #666;
+}
+
+.more-info {
+    text-align: center;
+}
+
+.more-info {
+    text-align: center;
+    display: flex;           /* Sử dụng flexbox */
+    justify-content: space-between; /* Căn đều các phần tử với khoảng cách tối đa */
+    gap: 8px;               /* Khoảng cách giữa các liên kết */
+    flex-wrap: wrap;        /* Cho phép xuống dòng nếu không đủ chỗ */
+}
+
+.more-info a {
+    display: inline-block;
+    padding: 6px 12px;      /* Tăng padding nhẹ cho cân đối */
+    background: #007bff;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 12px;
+    transition: all 0.3s ease; /* Thêm transition cho cả background và transform */
+    flex: 1;                /* Cho phép các nút mở rộng đều nhau */
+    min-width: 80px;        /* Đảm bảo kích thước tối thiểu */
+    text-align: center;     /* Căn giữa chữ trong nút */
+}
+
+.more-info a:hover {
+    background: #0056b3;
+    transform: translateY(-2px); /* Hiệu ứng nâng nhẹ khi hover */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Thêm bóng nhẹ */
+}
+
