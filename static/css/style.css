@@ -1,3 +1,4 @@
+/* Reset và cài đặt cơ bản */
 body, html {
     height: 100%;
     margin: 0;
@@ -11,6 +12,7 @@ body, html {
     transition: filter 0.3s ease;
 }
 
+/* Tìm kiếm thành phố */
 #search-container {
     position: absolute;
     top: 15px;
@@ -73,10 +75,10 @@ body, html {
     transform: translateX(3px);
 }
 
+/* Phần Popup bản đồ */
 .leaflet-popup-content-wrapper {
     background: linear-gradient(135deg, #ffffff, #f8f9fa);
     border-radius: 8px;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
     font-size: 14px;
     padding: 10px;
     max-width: 300px;
@@ -91,11 +93,54 @@ body, html {
 }
 
 .leaflet-marker-icon:hover {
-    transform: scale(1.2);
+    transform: scale(1.2); /* Làm tăng kích thước biểu tượng khi hover */
 }
 
+/* Cải thiện tính năng responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    .title {
+        font-size: 1.8rem;
+    }
+
+    .input-section {
+        padding: 1.5rem;
+    }
+
+    .input-section select {
+        max-width: 100%;
+    }
+
+    .result {
+        max-width: 100%;
+    }
+
+    .info h1, .info h2 {
+        font-size: 1.5rem;
+    }
+
+    .info h3 {
+        font-size: 1.2rem;
+    }
+}
+
+/* Chỉnh sửa hiệu ứng khi map được hover */
 #map:hover {
     filter: brightness(1.05);
+}
+
+/* Thêm hiệu ứng cho các phần tử khi hover */
+#search-container:hover {
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+    transform: translateX(-50%) scale(1.02);
+}
+
+.leaflet-popup-content-wrapper {
+    font-size: 14px;
+    font-weight: bold;
 }
 
 .popup-content {
@@ -187,6 +232,5 @@ body, html {
 .more-info a:hover {
     background: #0056b3;
     transform: translateY(-2px); /* Hiệu ứng nâng nhẹ khi hover */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Thêm bóng nhẹ */
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
 }
-
