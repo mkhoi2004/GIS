@@ -4,7 +4,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
 from datetime import datetime
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 app = Flask(__name__)
 
 # Kết nối MongoDB
@@ -138,8 +141,8 @@ def fetch_city_data(city, country):
         # Lưu vào MongoDB ngay cả khi có lỗi
         collection.insert_one(city_data.copy())  # Sử dụng .copy() để tránh tham chiếu
         return city_data
-    
-API_KEY = 'AIzaSyCRuO5q9fb2nKVqSGsF3oiGv7dK1KgicHg'
+
+API_KEY = os.getenv('API_KEY')    
 api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY
 
 @app.route('/chat', methods=['POST'])
