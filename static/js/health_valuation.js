@@ -82,3 +82,43 @@ function calculateHRI() {
     `;
     resultDiv.style.display = "block";
 }
+function sendMessage() {
+    let userMessage = document.getElementById("userMessage").value;
+    if (!userMessage.trim()) {
+        alert("Vui lòng nhập câu hỏi!");
+        return;
+    }
+
+    // Hiển thị tin nhắn của người dùng trong chatbox
+    let chatboxBody = document.getElementById("chatboxBody");
+    chatboxBody.innerHTML += `<div class="user-message">${userMessage}</div>`;
+
+    // Gửi yêu cầu tới backend (Flask)
+    fetch('/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: userMessage })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Log phản hồi từ backend
+        console.log("Response from backend:", data);
+
+        if (data.response) {
+            // Hiển thị phản hồi từ AI (Gemini)
+            let aiResponse = data.response;
+            chatboxBody.innerHTML += `<div class="ai-response">${aiResponse}</div>`;
+            document.getElementById("userMessage").value = ""; // Xóa ô nhập liệu
+
+            // Cuộn xuống dưới để hiển thị tin nhắn mới nhất
+            chatboxBody.scrollTop = chatboxBody.scrollHeight;
+        } else {
+            console.log("Không có phản hồi từ API Gemini");
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);  // Log lỗi nếu có sự cố
+    });
+}

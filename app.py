@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -138,7 +138,46 @@ def fetch_city_data(city, country):
         # Lưu vào MongoDB ngay cả khi có lỗi
         collection.insert_one(city_data.copy())  # Sử dụng .copy() để tránh tham chiếu
         return city_data
+    
+API_KEY = 'AIzaSyCRuO5q9fb2nKVqSGsF3oiGv7dK1KgicHg'
+api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_message = request.json.get("message")
+
+    # Dữ liệu gửi đến Gemini API
+    data = {
+        "contents": [{
+            "parts": [{"text": user_message}]
+        }]
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # Gửi yêu cầu POST tới Gemini API
+        response = requests.post(api_url, headers=headers, json=data)
+
+        # Kiểm tra phản hồi từ API
+        if response.status_code == 200:
+            # Đảm bảo trả về dữ liệu đúng
+            chat_response = response.json()
+            print(f"Chat response: {chat_response}")  # Để dễ dàng kiểm tra phản hồi
+
+            # Trả lại phản hồi JSON từ server
+            return jsonify({"response": chat_response['candidates'][0]['content']['parts'][0]['text']})
+        else:
+            chat_response = f"Error: {response.status_code} - {response.text}"
+            return jsonify({"response": chat_response})
+    
+    except Exception as e:
+        print(f"Exception occurred: {str(e)}")
+        return jsonify({"response": f"Error: {str(e)}"})
+
+    
 @app.route('/aqi', methods=['GET'])
 def get_aqi_data():
     result = []
