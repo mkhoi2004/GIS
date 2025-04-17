@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đánh giá rủi ro sức khỏe hô hấp từ dữ liệu không khí</title>
+    <link rel="stylesheet" href="/static/css/DuDoan.css">
+    <link rel="icon" href="/static/favicon.ico">
+    <!-- Thêm thư viện Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* CSS cơ bản nếu file DuDoan.css không hoạt động */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 20px 0;
+        }
+        .subtitle {
+            font-style: italic;
+            margin-top: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            flex: 1;
+            min-width: 300px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #219653;
+        }
+        .risk-level {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        .parameter-explanation {
+            width: 100%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Đánh giá rủi ro sức khỏe hô hấp</h1>
+        <p class="subtitle">Dựa trên dữ liệu chất lượng không khí tại Việt Nam và Đan Mạch</p>
+    </header>
+    <div style="text-align: center; margin: 20px 0;">
+        <a href="/" class="toolbar-link" style="text-decoration: none; color: #2c3e50; font-size: 18px;">
+            <span class="toolbar-icon" style="font-size: 24px;">🏠</span>
+            <span class="toolbar-text">Trang Chủ</span>
+        </a>
+        <a href="/index" class="toolbar-link" style="text-decoration: none; color: #2c3e50; font-size: 18px;">
+            <span class="toolbar-icon" style="font-size: 24px;">📍</span>
+            <span class="toolbar-text">Bản đồ AQI</span>
+        </a>
+       
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Nhập chỉ số chất lượng không khí</h2>
+            <form id="air-quality-form">
+                <div class="form-group">
+                    <label for="pm25">PM2.5 (µg/m³):</label>
+                    <input type="number" id="pm25" name="pm25" min="0" step="0.1" placeholder="Nhập giá trị PM2.5">
+                </div>
+                
+                <div class="form-group">
+                    <label for="pm10">PM10 (µg/m³):</label>
+                    <input type="number" id="pm10" name="pm10" min="0" step="0.1" placeholder="Nhập giá trị PM10">
+                </div>
+                
+                <div class="form-group">
+                    <label for="no2">NO₂ (ppb):</label>
+                    <input type="number" id="no2" name="no2" min="0" step="0.1" placeholder="Nhập giá trị NO₂">
+                </div>
+                
+                <div class="form-group">
+                    <label for="o3">O₃ (ppb):</label>
+                    <input type="number" id="o3" name="o3" min="0" step="0.1" placeholder="Nhập giá trị O₃">
+                </div>
+                
+                <div class="form-group">
+                    <label for="co">CO (ppm):</label>
+                    <input type="number" id="co" name="co" min="0" step="0.1" placeholder="Nhập giá trị CO">
+                </div>
+                
+                <div class="form-group">
+                    <label for="so2">SO₂ (ppb):</label>
+                    <input type="number" id="so2" name="so2" min="0" step="0.1" placeholder="Nhập giá trị SO₂">
+                </div>
+                
+                <div class="form-group">
+                    <label for="humidity">Độ ẩm (%):</label>
+                    <input type="number" id="humidity" name="humidity" min="0" max="100" step="0.1" placeholder="Nhập độ ẩm">
+                </div>
+                
+                <div class="form-group">
+                    <label for="temperature">Nhiệt độ (°C):</label>
+                    <input type="number" id="temperature" name="temperature" min="-50" max="60" step="0.1" placeholder="Nhập nhiệt độ">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wind">Tốc độ gió (m/s):</label>
+                    <input type="number" id="wind" name="wind" min="0" step="0.1" placeholder="Nhập tốc độ gió">
+                </div>
+                
+                <button type="submit">Đánh giá rủi ro</button>
+            </form>
+        </div>
+        
+        <div class="card" id="results" style="display: none;">
+            <h2>Kết quả đánh giá</h2>
+            <div>
+                <span id="aqi-value" style="font-size: 18px; font-weight: bold;"></span>
+                <span id="risk-level" class="risk-level"></span>
+            </div>
+            <p id="risk-description"></p>
+            <p id="health-effects"></p>
+            
+            <div class="recommendations">
+                <h3>Khuyến nghị:</h3>
+                <ul id="recommendations-list"></ul>
+            </div>
+            
+            <div class="specific-recommendations">
+                <h3>Khuyến nghị theo nhóm:</h3>
+                <ul id="specific-recommendations-list"></ul>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="risk-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card parameter-explanation">
+        <h3>Thông số chất lượng không khí và mức ảnh hưởng sức khỏe</h3>
+        <table>
+            <tr>
+                <th>Chỉ số AQI</th>
+                <th>Mức độ</th>
+                <th>Ảnh hưởng sức khỏe</th>
+            </tr>
+            <tr>
+                <td>0-50</td>
+                <td style="background-color: #a8e05f; color: #33691e;">Tốt</td>
+                <td>Chất lượng không khí được coi là tốt và ô nhiễm không khí gây ra ít hoặc không có rủi ro.</td>
+            </tr>
+            <tr>
+                <td>51-100</td>
+                <td style="background-color: #fdd835; color: #424242;">Trung bình</td>
+                <td>Chất lượng không khí ở mức chấp nhận được, tuy nhiên có thể gây ra một số lo ngại cho những người cực kỳ nhạy cảm.</td>
+            </tr>
+            <tr>
+                <td>101-150</td>
+                <td style="background-color: #fb8c00; color: white;">Không lành mạnh cho nhóm nhạy cảm</td>
+                <td>Những người thuộc nhóm nhạy cảm có thể bị ảnh hưởng sức khỏe. Người bình thường ít bị ảnh hưởng.</td>
+            </tr>
+            <tr>
+                <td>151-200</td>
+                <td style="background-color: #e53935; color: white;">Không lành mạnh</td>
+                <td>Mọi người bắt đầu gặp vấn đề sức khỏe, đặc biệt là khó thở, ho. Nhóm nhạy cảm bị ảnh hưởng nghiêm trọng hơn.</td>
+            </tr>
+            <tr>
+                <td>201-300</td>
+                <td style="background-color: #8e24aa; color: white;">Rất không lành mạnh</td>
+                <td>Cảnh báo sức khỏe: Mọi người có nguy cơ gặp triệu chứng nghiêm trọng (khó thở, đau ngực). Nhóm nhạy cảm cần tránh ra ngoài.</td>
+            </tr>
+            <tr>
+                <td>301-500</td>
+                <td style="background-color: #b71c1c; color: white;">Nguy hiểm</td>
+                <td>Tình trạng khẩn cấp: Toàn bộ dân số bị ảnh hưởng nghiêm trọng, có thể dẫn đến nhập viện hoặc tử vong nếu tiếp xúc kéo dài.</td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        // Xử lý form và hiển thị kết quả
+        document.getElementById('air-quality-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Thu thập dữ liệu từ form
+            const formData = {
+                pm25: document.getElementById('pm25').value,
+                pm10: document.getElementById('pm10').value,
+                no2: document.getElementById('no2').value,
+                o3: document.getElementById('o3').value,
+                co: document.getElementById('co').value,
+                so2: document.getElementById('so2').value,
+                humidity: document.getElementById('humidity').value,
+                temperature: document.getElementById('temperature').value,
+                wind: document.getElementById('wind').value
+            };
+            
+            // Gửi dữ liệu đến API
+            fetch('/api/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                displayResults(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Có lỗi xảy ra khi xử lý dữ liệu. Vui lòng thử lại sau.');
+            });
+        });
+        
+        // Hiển thị kết quả
+        function displayResults(data) {
+            // Hiển thị khu vực kết quả
+            document.getElementById('results').style.display = 'block';
+            
+            // Hiển thị AQI và mức độ rủi ro
+            document.getElementById('aqi-value').textContent = `AQI: ${data.calculated_aqi || 'N/A'}`;
+            
+            const riskLevelElement = document.getElementById('risk-level');
+            riskLevelElement.textContent = data.risk_name;
+            
+            // Màu sắc theo mức độ rủi ro
+            const colors = {
+                'Tốt (Good)': '#a8e05f',
+                'Trung bình (Moderate)': '#fdd835',
+                'Không lành mạnh cho nhóm nhạy cảm (Unhealthy for Sensitive Groups)': '#fb8c00',
+                'Không lành mạnh (Unhealthy)': '#e53935',
+                'Rất không lành mạnh (Very Unhealthy)': '#8e24aa',
+                'Nguy hiểm (Hazardous)': '#b71c1c'
+            };
+            
+            riskLevelElement.style.backgroundColor = colors[data.risk_name] || '#777777';
+            riskLevelElement.style.color = data.risk_name === 'Tốt (Good)' || data.risk_name === 'Trung bình (Moderate)' ? '#333' : 'white';
+            
+            // Hiển thị mô tả và ảnh hưởng sức khỏe
+            document.getElementById('risk-description').textContent = data.description;
+            document.getElementById('health-effects').textContent = data.health_effects;
+            
+            // Hiển thị khuyến nghị
+            const recommendationsList = document.getElementById('recommendations-list');
+            recommendationsList.innerHTML = '';
+            data.recommendations.forEach(rec => {
+                const li = document.createElement('li');
+                li.textContent = rec;
+                recommendationsList.appendChild(li);
+            });
+            
+            // Hiển thị khuyến nghị theo nhóm đối tượng
+            const specificRecommendationsList = document.getElementById('specific-recommendations-list');
+            specificRecommendationsList.innerHTML = '';
+            
+            for (const [group, recommendation] of Object.entries(data.specific_recommendations)) {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>${group}:</strong> ${recommendation}`;
+                specificRecommendationsList.appendChild(li);
+            }
+            
+            // Vẽ biểu đồ
+            const probLabels = ['Tốt', 'Trung bình', 'Không lành mạnh cho nhóm nhạy cảm', 'Không lành mạnh', 'Rất không lành mạnh', 'Nguy hiểm'];
+            const chartLabels = probLabels.slice(0, data.risk_probabilities.length);
+            
+            // Nếu đã có biểu đồ, hủy nó trước khi tạo mới
+            if (window.riskChart) {
+                window.riskChart.destroy();
+            }
+            
+            const ctx = document.getElementById('risk-chart').getContext('2d');
+            window.riskChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Xác suất rủi ro sức khỏe (%)',
+                        data: data.risk_probabilities.map(p => p * 100), // Chuyển xác suất thành phần trăm
+                        backgroundColor: [
+                            '#a8e05f', '#fdd835', '#fb8c00', 
+                            '#e53935', '#8e24aa', '#b71c1c'
+                        ].slice(0, data.risk_probabilities.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Xác suất (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

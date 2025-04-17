@@ -5,13 +5,18 @@ from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
 from datetime import datetime
 from dotenv import load_dotenv
+import pandas as pd
+import joblib
 import os
+from health_recommendations import get_health_recommendations, get_specific_group_recommendations
 
 load_dotenv()
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')  # Lấy từ .env hoặc mặc định
+# Loại bỏ CSRFProtect vì endpoint /api/predict nhận JSON, không cần CSRF
 
 # Kết nối MongoDB
-client = MongoClient('mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/')
+client = MongoClient(os.getenv('MONGO_URI', 'mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/'))
 db = client['GIS']
 collection = db['DataAQI']
 
@@ -76,18 +81,18 @@ def fetch_city_data(city, country):
         response = requests.get(city['url'], timeout=10)
         response.raise_for_status()
         data = response.json()
-        aqi = data['data']['aqi'] if data['status'] == 'ok' else 'N/A'
+        aqi = data['data']['aqi'] if data['status'] == 'ok' else None
         pollutants = data['data']['iaqi'] if data['status'] == 'ok' and 'iaqi' in data['data'] else {}
-        pm25 = pollutants.get('pm25', {}).get('v', 'N/A')
-        pm10 = pollutants.get('pm10', {}).get('v', 'N/A')
-        no2 = pollutants.get('no2', {}).get('v', 'N/A')
-        co = pollutants.get('co', {}).get('v', 'N/A')
-        o3 = pollutants.get('o3', {}).get('v', 'N/A')
-        so2 = pollutants.get('so2', {}).get('v', 'N/A')
-        humidity = pollutants.get('h', {}).get('v', 'N/A')
-        temperature = pollutants.get('t', {}).get('v', 'N/A')
-        wind = pollutants.get('w', {}).get('v', 'N/A')
-        update_time = data['data']['time']['s'] if data['status'] == 'ok' and 'time' in data['data'] else 'N/A'
+        pm25 = pollutants.get('pm25', {}).get('v', None)
+        pm10 = pollutants.get('pm10', {}).get('v', None)
+        no2 = pollutants.get('no2', {}).get('v', None)
+        co = pollutants.get('co', {}).get('v', None)
+        o3 = pollutants.get('o3', {}).get('v', None)
+        so2 = pollutants.get('so2', {}).get('v', None)
+        humidity = pollutants.get('h', {}).get('v', None)
+        temperature = pollutants.get('t', {}).get('v', None)
+        wind = pollutants.get('w', {}).get('v', None)
+        update_time = data['data']['time']['s'] if data['status'] == 'ok' and 'time' in data['data'] else None
 
         city_data = {
             'name': city['name'],
@@ -105,7 +110,7 @@ def fetch_city_data(city, country):
             'update_time': update_time,
             'lat': city['lat'],
             'lon': city['lon'],
-            'population': city['population'],  # Thêm population
+            'population': city['population'],
             'area': city['area'],
             'saved_at': datetime.now().strftime('%H:%M %d/%m/%Y')
         }
@@ -113,74 +118,58 @@ def fetch_city_data(city, country):
         # Lưu vào cache
         cache[city['name']] = {'data': city_data, 'timestamp': current_time}
         # Lưu vào MongoDB
-        collection.insert_one(city_data.copy())  # Sử dụng .copy() để tránh tham chiếu
-
+        collection.insert_one(city_data.copy())
         return city_data
     except Exception as e:
-        print(f"Error fetching data for {city['name']}: {str(e)}")  # Thêm log để debug
+        print(f"Error fetching data for {city['name']}: {str(e)}")
         city_data = {
             'name': city['name'],
             'country': country,
-            'aqi': 'N/A',
-            'pm25': 'N/A',
-            'pm10': 'N/A',
-            'no2': 'N/A',
-            'co': 'N/A',
-            'o3': 'N/A',
-            'so2': 'N/A',
-            'humidity': 'N/A',
-            'temperature': 'N/A',
-            'wind': 'N/A',
-            'update_time': 'N/A',
+            'aqi': None,
+            'pm25': None,
+            'pm10': None,
+            'no2': None,
+            'co': None,
+            'o3': None,
+            'so2': None,
+            'humidity': None,
+            'temperature': None,
+            'wind': None,
+            'update_time': None,
             'lat': city['lat'],
             'lon': city['lon'],
-            'population': city['population'],  # Thêm population
+            'population': city['population'],
             'area': city['area'],
             'saved_at': datetime.now().strftime('%H:%M %d/%m/%Y')
         }
-        # Lưu vào MongoDB ngay cả khi có lỗi
-        collection.insert_one(city_data.copy())  # Sử dụng .copy() để tránh tham chiếu
+        collection.insert_one(city_data.copy())
         return city_data
 
-API_KEY = os.getenv('API_KEY')    
-api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY
+API_KEY = os.getenv('API_KEY')
+api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}" if API_KEY else None
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_message = request.json.get("message")
-
-    # Dữ liệu gửi đến Gemini API
-    data = {
-        "contents": [{
-            "parts": [{"text": user_message}]
-        }]
-    }
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
+    if not API_KEY:
+        return jsonify({'error': 'API key not configured'}), 500
     try:
-        # Gửi yêu cầu POST tới Gemini API
+        user_message = request.json.get("message")
+        if not user_message:
+            return jsonify({'error': 'No message provided'}), 400
+
+        data = {"contents": [{"parts": [{"text": user_message}]}]}
+        headers = {"Content-Type": "application/json"}
         response = requests.post(api_url, headers=headers, json=data)
 
-        # Kiểm tra phản hồi từ API
         if response.status_code == 200:
-            # Đảm bảo trả về dữ liệu đúng
             chat_response = response.json()
-            print(f"Chat response: {chat_response}")  # Để dễ dàng kiểm tra phản hồi
-
-            # Trả lại phản hồi JSON từ server
             return jsonify({"response": chat_response['candidates'][0]['content']['parts'][0]['text']})
         else:
-            chat_response = f"Error: {response.status_code} - {response.text}"
-            return jsonify({"response": chat_response})
-    
+            return jsonify({'error': f"API error: {response.status_code} - {response.text}"}), 500
     except Exception as e:
-        print(f"Exception occurred: {str(e)}")
-        return jsonify({"response": f"Error: {str(e)}"})
+        print(f"Chat error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-    
 @app.route('/aqi', methods=['GET'])
 def get_aqi_data():
     result = []
@@ -192,7 +181,7 @@ def get_aqi_data():
                     aqi_data = future.result()
                     result.append(aqi_data)
                 except Exception as e:
-                    print(f"Error processing {city['name']}: {str(e)}")  # Thêm log để debug
+                    print(f"Error processing {city['name']}: {str(e)}")
     return jsonify(result)
 
 @app.route('/index')
@@ -203,5 +192,185 @@ def index():
 def health_evaluation():
     return render_template('health_evaluation.html')
 
+# Tải mô hình và bộ tiền xử lý
+try:
+    model = joblib.load('health_risk_model.pkl')
+    preprocessor = joblib.load('preprocessor.pkl')
+except FileNotFoundError as e:
+    print(f"Model loading error: {str(e)}")
+    model = None
+    preprocessor = None
+
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    if model is None or preprocessor is None:
+        return jsonify({'error': 'Model or preprocessor not loaded'}), 500
+
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No input data provided'}), 400
+
+        # Lấy dữ liệu từ request
+        features = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
+        input_values = [
+            float(data.get(feature)) if data.get(feature) not in (None, '') else None
+            for feature in features
+        ]
+
+        # Kiểm tra xem có ít nhất một giá trị hợp lệ
+        if all(val is None for val in input_values):
+            return jsonify({'error': 'At least one input value must be provided'}), 400
+
+        # Tạo DataFrame
+        input_data = pd.DataFrame([input_values], columns=features)
+
+        # Tiền xử lý và dự đoán
+        input_processed = preprocessor.transform(input_data)
+        risk_level = int(model.predict(input_processed)[0])
+        risk_probs = model.predict_proba(input_processed)[0].tolist()
+
+        # Tính AQI
+        calculated_aqi = calculate_aqi(
+            input_values[0], input_values[1], input_values[2],
+            input_values[3], input_values[4], input_values[5]
+        )
+
+        # Lấy khuyến nghị
+        recommendations = get_health_recommendations(risk_level)
+        specific_recommendations = get_specific_group_recommendations(calculated_aqi if calculated_aqi is not None else 0)
+
+        response = {
+            'risk_level': risk_level,
+            'risk_name': recommendations['risk_name'],
+            'color': recommendations['color'],
+            'description': recommendations['description'],
+            'health_effects': recommendations['health_effects'],
+            'recommendations': recommendations['recommendations'],
+            'specific_recommendations': recommendations['specific_recommendations'],
+            'specific_group_recommendations': specific_recommendations,
+            'risk_probabilities': risk_probs,
+            'calculated_aqi': round(calculated_aqi, 1) if calculated_aqi is not None else None
+        }
+
+        return jsonify(response)
+
+    except ValueError as e:
+        print(f"Prediction error: {str(e)}")
+        return jsonify({'error': f'Invalid input data: {str(e)}'}), 400
+    except Exception as e:
+        print(f"Prediction error: {str(e)}")
+        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+
+def calculate_aqi(pm25, pm10, no2, co, o3, so2):
+    """Tính AQI dựa trên các chất ô nhiễm, lấy giá trị cao nhất."""
+    aqi_values = []
+
+    # PM2.5
+    if pm25 is not None:
+        if pm25 <= 12:
+            aqi = (50 / 12) * pm25
+        elif pm25 <= 35.4:
+            aqi = 50 + (50 / (35.4 - 12)) * (pm25 - 12)
+        elif pm25 <= 55.4:
+            aqi = 100 + (50 / (55.4 - 35.4)) * (pm25 - 35.4)
+        elif pm25 <= 150.4:
+            aqi = 150 + (50 / (150.4 - 55.4)) * (pm25 - 55.4)
+        elif pm25 <= 250.4:
+            aqi = 200 + (100 / (250.4 - 150.4)) * (pm25 - 150.4)
+        else:
+            aqi = 300 + (200 / (500.4 - 250.4)) * min(pm25 - 250.4, 250)
+        aqi_values.append(aqi)
+
+    # PM10 - FIX: Sửa lại công thức tính
+    if pm10 is not None:
+        if pm10 <= 54:
+            aqi = (50 / 54) * pm10
+        elif pm10 <= 154:
+            aqi = 50 + (50 / (154 - 54)) * (pm10 - 54)
+        elif pm10 <= 254:
+            aqi = 100 + (50 / (254 - 154)) * (pm10 - 154)
+        elif pm10 <= 354:
+            aqi = 150 + (50 / (354 - 254)) * (pm10 - 254)  # FIX: Sửa từ (pm10 - 154)
+        elif pm10 <= 424:
+            aqi = 200 + (100 / (424 - 354)) * (pm10 - 354)
+        else:
+            aqi = 300 + (200 / (604 - 424)) * min(pm10 - 424, 180)
+        aqi_values.append(aqi)
+
+    # NO2
+    if no2 is not None:
+        if no2 <= 53:
+            aqi = (50 / 53) * no2
+        elif no2 <= 100:
+            aqi = 50 + (50 / (100 - 53)) * (no2 - 53)
+        elif no2 <= 360:
+            aqi = 100 + (50 / (360 - 100)) * (no2 - 100)
+        elif no2 <= 649:
+            aqi = 150 + (50 / (649 - 360)) * (no2 - 360)
+        elif no2 <= 1249:
+            aqi = 200 + (100 / (1249 - 649)) * (no2 - 649)
+        else:
+            aqi = 300 + (200 / (2049 - 1249)) * min(no2 - 1249, 800)
+        aqi_values.append(aqi)
+
+    # CO
+    if co is not None:
+        if co <= 4.4:
+            aqi = (50 / 4.4) * co
+        elif co <= 9.4:
+            aqi = 50 + (50 / (9.4 - 4.4)) * (co - 4.4)
+        elif co <= 12.4:
+            aqi = 100 + (50 / (12.4 - 9.4)) * (co - 9.4)
+        elif co <= 15.4:
+            aqi = 150 + (50 / (15.4 - 12.4)) * (co - 12.4)
+        elif co <= 30.4:
+            aqi = 200 + (100 / (30.4 - 15.4)) * (co - 15.4)
+        else:
+            aqi = 300 + (200 / (50.4 - 30.4)) * min(co - 30.4, 20)
+        aqi_values.append(aqi)
+
+    # O3
+    if o3 is not None:
+        if o3 <= 54:
+            aqi = (50 / 54) * o3
+        elif o3 <= 70:
+            aqi = 50 + (50 / (70 - 54)) * (o3 - 54)
+        elif o3 <= 85:
+            aqi = 100 + (50 / (85 - 70)) * (o3 - 70)
+        elif o3 <= 105:
+            aqi = 150 + (50 / (105 - 85)) * (o3 - 85)
+        elif o3 <= 200:
+            aqi = 200 + (100 / (200 - 105)) * (o3 - 105)
+        else:
+            aqi = 300 + (200 / (300 - 200)) * min(o3 - 200, 100)
+        aqi_values.append(aqi)
+
+    # SO2
+    if so2 is not None:
+        if so2 <= 35:
+            aqi = (50 / 35) * so2
+        elif so2 <= 75:
+            aqi = 50 + (50 / (75 - 35)) * (so2 - 35)
+        elif so2 <= 185:
+            aqi = 100 + (50 / (185 - 75)) * (so2 - 75)
+        elif so2 <= 304:
+            aqi = 150 + (50 / (304 - 185)) * (so2 - 185)
+        elif so2 <= 604:
+            aqi = 200 + (100 / (604 - 304)) * (so2 - 304)
+        else:
+            aqi = 300 + (200 / (1004 - 604)) * min(so2 - 604, 400)
+        aqi_values.append(aqi)
+
+    return max(aqi_values) if aqi_values else None
+
+@app.route('/')
+@app.route('/DuDoan')
+def DuDoan():
+    return render_template('DuDoan.html')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    try:
+        app.run(debug=True)
+    except Exception as e:
+        print(f"Error during application startup: {str(e)}")
