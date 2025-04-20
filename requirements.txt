@@ -1,0 +1,10 @@
+Flask
+numpy
+matplotlib
+pymongo
+pandas
+joblib
+scikit-learn
+requests
+ipykernel
+dotenv
