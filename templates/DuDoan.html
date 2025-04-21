@@ -57,6 +57,7 @@
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box; /* Thêm dòng này */
         }
         button {
             background-color: #27ae60;
@@ -99,17 +100,21 @@
         .form-group-inline {
             display: flex;
             gap: 10px;
-            align-items: flex-end;
+            align-items: baseline; /* Căn chỉnh theo baseline */
+            margin-bottom: 15px; /* Thêm lại margin bottom nếu cần */
         }
         .input-wrapper, .unit-wrapper {
-            flex: 1;
+            flex: 1; /* Giữ nguyên để chia đều không gian */
         }
         .unit-wrapper select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            height: 37px;
+            box-sizing: border-box; /* Đảm bảo padding không làm tăng kích thước */
+        }
+        .form-group-inline label {
+            margin-bottom: 5px; /* Giữ khoảng cách với input/select */
         }
     </style>
 </head>
