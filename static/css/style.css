@@ -217,7 +217,8 @@ body, html {
 
 .more-info a {
     display: inline-block;
-    padding: 6px 12px;     
+    padding: 6px 12px; 
+    background-color: #007bff;    
     color: #fff;
     text-decoration: none;
     border-radius: 5px;
