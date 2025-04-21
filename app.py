@@ -12,8 +12,6 @@ from health_recommendations import get_health_recommendations, get_specific_grou
 import math
 import numpy as np
 
-
-
 # Tải biến môi trường từ file .env
 load_dotenv()
 app = Flask(__name__)
