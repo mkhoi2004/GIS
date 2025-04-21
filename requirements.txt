@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Flask
 numpy
 matplotlib
@@ -8,5 +9,3 @@ scikit-learn
 requests
 ipykernel
 dotenv
-xgboost
-seaborn
