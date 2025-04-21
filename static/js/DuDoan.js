@@ -116,28 +116,16 @@ function submitPredictionForm(event) {
  * @returns {object} - Object chứa tên mức ('name') và mã màu ('color').
  */
 function getAqiLevelInfo(aqi) {
-    if (aqi === null || aqi === undefined) {
-        return { name: "N/A", color: "#cccccc", textColor: "#000000" }; // Màu xám cho không có dữ liệu
+    if (aqi === null || aqi === undefined || isNaN(aqi)) {
+        return { name: "N/A", color: "#cccccc", textColor: "#000000" };
     }
-    if (aqi <= 50) {
-        // Tốt (Good) - Xanh lá
-        return { name: "Tốt", color: "#00e400", textColor: "#000000" };
-    } else if (aqi <= 100) {
-        // Trung bình (Moderate) - Vàng
-        return { name: "Trung bình", color: "#ffff00", textColor: "#000000" };
-    } else if (aqi <= 150) {
-        // Không lành mạnh cho nhóm nhạy cảm (Unhealthy for Sensitive Groups) - Cam
-        return { name: "Không lành mạnh cho nhóm nhạy cảm", color: "#ff7e00", textColor: "#ffffff" };
-    } else if (aqi <= 200) {
-        // Không lành mạnh (Unhealthy) - Đỏ
-        return { name: "Không lành mạnh", color: "#ff0000", textColor: "#ffffff" };
-    } else if (aqi <= 300) {
-        // Rất không lành mạnh (Very Unhealthy) - Tím
-        return { name: "Rất không lành mạnh", color: "#8f3f97", textColor: "#ffffff" };
-    } else {
-        // Nguy hiểm (Hazardous) - Nâu đỏ
-        return { name: "Nguy hiểm", color: "#7e0023", textColor: "#ffffff" };
-    }
+    aqi = Math.round(aqi); // Làm tròn AQI để so sánh
+    if (aqi <= 50) return { name: "Tốt", color: "#a8e05f", textColor: "#33691e" };
+    if (aqi <= 100) return { name: "Trung bình", color: "#fdd835", textColor: "#424242" };
+    if (aqi <= 150) return { name: "Không lành mạnh cho nhóm nhạy cảm", color: "#fb8c00", textColor: "white" };
+    if (aqi <= 200) return { name: "Không lành mạnh", color: "#e53935", textColor: "white" };
+    if (aqi <= 300) return { name: "Rất không lành mạnh", color: "#8e24aa", textColor: "white" };
+    return { name: "Nguy hiểm", color: "#b71c1c", textColor: "white" };
 }
 
 // Đảm bảo DOM đã tải xong trước khi thêm event listener

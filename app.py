@@ -241,57 +241,81 @@ def index():
 def health_evaluation():
     return render_template('health_evaluation.html')
 
-# Tải mô hình và bộ tiền xử lý
+# --- Tải Pipeline ---
+pipeline = None
+pipeline_features = [] # Lưu trữ tên features mà pipeline mong đợi
 try:
-    model = joblib.load('health_risk_model.pkl')
-    preprocessor = joblib.load('preprocessor.pkl')
-except FileNotFoundError as e:
-    print(f"Model loading error: {str(e)}")
-    model = None
-    preprocessor = None
+    # Tải pipeline duy nhất
+    pipeline = joblib.load('health_risk_pipeline.pkl')
+    print("Đã tải thành công health_risk_pipeline.pkl")
+
+    # Cố gắng lấy tên features từ bước preprocessor của pipeline (nếu có)
+    try:
+        # Giả sử preprocessor là bước đầu tiên và là ColumnTransformer
+        preprocessor_step = pipeline.named_steps.get('preprocessor')
+        if preprocessor_step and hasattr(preprocessor_step, 'transformers_'):
+            # Lấy tên features từ transformer đầu tiên (thường là 'num')
+            pipeline_features = preprocessor_step.transformers_[0][2]
+            print(f"Pipeline mong đợi các features: {pipeline_features}")
+        else:
+            # Nếu không lấy được, sử dụng danh sách mặc định (cần khớp với lúc huấn luyện)
+            pipeline_features = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
+            print(f"Không lấy được features từ pipeline, sử dụng mặc định: {pipeline_features}")
+    except Exception as e:
+        pipeline_features = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
+        print(f"Lỗi khi lấy features từ pipeline ({e}), sử dụng mặc định: {pipeline_features}")
+
+except FileNotFoundError:
+    print("Lỗi: Không tìm thấy file 'health_risk_pipeline.pkl'.")
+    pipeline = None
 except Exception as e:
-    print(f"General error loading model/preprocessor: {str(e)}")
-    model = None
-    preprocessor = None
+    print(f"Lỗi khi tải pipeline: {e}")
+    pipeline = None
+# --- Kết thúc tải Pipeline ---
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
-    if model is None or preprocessor is None:
-        return jsonify({'error': 'Model or preprocessor not loaded'}), 500
+    # Sử dụng biến pipeline đã tải ở trên
+    if pipeline is None:
+        return jsonify({'error': 'Model pipeline is not loaded.'}), 500
+    if not pipeline_features:
+         return jsonify({'error': 'Pipeline features not determined.'}), 500
 
     try:
         data = request.json
         if not data:
             return jsonify({'error': 'No input data provided'}), 400
 
+        # --- Thu thập và chuyển đổi đơn vị ---
         input_values_raw = {}
         input_units = {}
+        # Các chất ô nhiễm cần kiểm tra đơn vị
         pollutants_with_units = ['no2', 'co', 'o3', 'so2']
+        # Các features khác không cần đơn vị đặc biệt
         other_features = ['pm25', 'pm10', 'humidity', 'temperature', 'wind']
 
+        # Lấy giá trị và đơn vị
         for feature in pollutants_with_units:
             val_str = data.get(feature)
             unit = data.get(f"{feature}_unit")
-            input_units[feature] = unit if unit in (['ppb', 'ugm3'] if feature != 'co' else ['ppm', 'ugm3']) else None
-
-            if val_str not in (None, ''):
-                try:
-                    input_values_raw[feature] = float(val_str)
-                except (ValueError, TypeError):
-                    input_values_raw[feature] = None
-            else:
+            # Xác định đơn vị hợp lệ
+            valid_units = (['ppb', 'ugm3'] if feature != 'co' else ['ppm', 'ugm3'])
+            input_units[feature] = unit if unit in valid_units else None
+            # Chuyển giá trị sang float, lỗi thành None
+            try:
+                input_values_raw[feature] = float(val_str) if val_str not in (None, '') else None
+            except (ValueError, TypeError):
                 input_values_raw[feature] = None
 
         for feature in other_features:
             val_str = data.get(feature)
-            if val_str not in (None, ''):
-                try:
-                    input_values_raw[feature] = float(val_str)
-                except (ValueError, TypeError):
-                    input_values_raw[feature] = None
-            else:
+            try:
+                input_values_raw[feature] = float(val_str) if val_str not in (None, '') else None
+            except (ValueError, TypeError):
                 input_values_raw[feature] = None
 
+        # --- Chuẩn bị dữ liệu cho tính toán AQI ---
+        # Hàm calculate_aqi cần: pm25, pm10 (ug/m3), no2, o3, so2 (ppb), co (ppm)
         aqi_input = {}
         aqi_input['pm25'] = input_values_raw.get('pm25')
         aqi_input['pm10'] = input_values_raw.get('pm10')
@@ -299,22 +323,25 @@ def predict():
         co_raw = input_values_raw.get('co')
         co_unit = input_units.get('co')
         if co_raw is not None and co_unit == 'ugm3':
-            aqi_input['co_ppm'] = ugm3_to_ppm(co_raw, MW['co'])
+            aqi_input['co_ppm'] = ugm3_to_ppm(co_raw, MW.get('co'))
         elif co_raw is not None and co_unit == 'ppm':
             aqi_input['co_ppm'] = co_raw
         else:
-            aqi_input['co_ppm'] = None
+            aqi_input['co_ppm'] = None # Sẽ là None nếu giá trị hoặc đơn vị không hợp lệ
 
         for gas in ['no2', 'o3', 'so2']:
             raw_val = input_values_raw.get(gas)
             unit = input_units.get(gas)
             if raw_val is not None and unit == 'ugm3':
-                aqi_input[f'{gas}_ppb'] = ugm3_to_ppb(raw_val, MW[gas])
+                aqi_input[f'{gas}_ppb'] = ugm3_to_ppb(raw_val, MW.get(gas))
             elif raw_val is not None and unit == 'ppb':
                 aqi_input[f'{gas}_ppb'] = raw_val
             else:
-                aqi_input[f'{gas}_ppb'] = None
+                aqi_input[f'{gas}_ppb'] = None # Sẽ là None nếu giá trị hoặc đơn vị không hợp lệ
 
+        # --- Chuẩn bị dữ liệu cho Pipeline Model ---
+        # Pipeline mong đợi các features theo thứ tự `pipeline_features`
+        # Đơn vị chuẩn cho model (dựa trên notebook): pm25, pm10 (ug/m3), no2, o3, so2 (ppb), co (ppm), humidity(%), temp(C), wind(m/s)
         model_input_values = {}
         model_input_values['pm25'] = input_values_raw.get('pm25')
         model_input_values['pm10'] = input_values_raw.get('pm10')
@@ -322,81 +349,106 @@ def predict():
         model_input_values['temperature'] = input_values_raw.get('temperature')
         model_input_values['wind'] = input_values_raw.get('wind')
 
+        # Chuyển CO về ppm cho model
         if co_raw is not None and co_unit == 'ugm3':
-             model_input_values['co'] = ugm3_to_ppm(co_raw, MW['co'])
+             model_input_values['co'] = ugm3_to_ppm(co_raw, MW.get('co'))
         elif co_raw is not None and co_unit == 'ppm':
              model_input_values['co'] = co_raw
         else:
              model_input_values['co'] = None
 
+        # Chuyển NO2, O3, SO2 về ppb cho model
         for gas in ['no2', 'o3', 'so2']:
             raw_val = input_values_raw.get(gas)
             unit = input_units.get(gas)
             if raw_val is not None and unit == 'ugm3':
-                model_input_values[gas] = ugm3_to_ppb(raw_val, MW[gas])
+                model_input_values[gas] = ugm3_to_ppb(raw_val, MW.get(gas))
             elif raw_val is not None and unit == 'ppb':
                 model_input_values[gas] = raw_val
             else:
                 model_input_values[gas] = None
 
-        model_features_order = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
-        input_for_model_list = []
-        for f in model_features_order:
+        # Tạo list giá trị theo đúng thứ tự pipeline_features
+        input_for_pipeline_list = []
+        for f in pipeline_features:
             val = model_input_values.get(f)
-            input_for_model_list.append(val if val is not None else np.nan)
+            # Đảm bảo giá trị là số hoặc NaN, không phải None
+            input_for_pipeline_list.append(float(val) if val is not None else np.nan)
 
         print("-" * 20)
         print(f"Received JSON data: {data}")
         print(f"Raw input values: {input_values_raw}")
         print(f"Input units: {input_units}")
         print(f"Values passed to calculate_aqi: pm25={aqi_input['pm25']}, pm10={aqi_input['pm10']}, no2_ppb={aqi_input['no2_ppb']}, co_ppm={aqi_input['co_ppm']}, o3_ppb={aqi_input['o3_ppb']}, so2_ppb={aqi_input['so2_ppb']}")
-        print(f"Values for model prediction (ordered, NaN for missing): {input_for_model_list}")
+        print(f"Values for pipeline prediction (ordered by {pipeline_features}, NaN for missing): {input_for_pipeline_list}")
 
+        # --- Tính toán AQI ---
+        # Kiểm tra xem có đủ dữ liệu hợp lệ để tính AQI không
         pollutants_for_aqi_check = [aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'], aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']]
         if not any(p is not None and not math.isnan(p) and not math.isinf(p) for p in pollutants_for_aqi_check):
              calculated_aqi = None
              print("    [predict] Not enough valid pollutant data to calculate AQI.")
         else:
+            # Gọi hàm tính AQI với các giá trị đã chuẩn hóa đơn vị
             calculated_aqi = calculate_aqi(
                 aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'],
                 aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']
             )
+        print(f"Calculated AQI result: {calculated_aqi}")
 
-        input_data = pd.DataFrame([input_for_model_list], columns=model_features_order)
+        # --- Dự đoán bằng Pipeline ---
+        # Tạo DataFrame đầu vào cho pipeline
+        input_df = pd.DataFrame([input_for_pipeline_list], columns=pipeline_features)
 
         try:
-            input_processed = preprocessor.transform(input_data)
-            if np.isnan(input_processed).any():
-                 print("Warning: NaN values present after preprocessing. Model prediction might be affected.")
-            risk_level = int(model.predict(input_processed)[0])
-            risk_probs = model.predict_proba(input_processed)[0].tolist()
+            # Dự đoán mức độ rủi ro (lớp)
+            predicted_risk_level = int(pipeline.predict(input_df)[0])
+
+            # Dự đoán xác suất cho các lớp mà model đã học
+            risk_probs_learned = pipeline.predict_proba(input_df)[0]
+
+            # Tạo mảng xác suất đầy đủ 6 lớp (0-5)
+            risk_probs_full = np.zeros(6)
+            learned_classes = pipeline.classes_ # Lấy các lớp thực tế model đã học (ví dụ: [0, 1, 2, 3])
+            for i, cls_label in enumerate(learned_classes):
+                 if 0 <= cls_label < 6: # Đảm bảo chỉ số lớp hợp lệ
+                     risk_probs_full[int(cls_label)] = risk_probs_learned[i]
+
+            print(f"Predicted Risk Level (from model): {predicted_risk_level}")
+            print(f"Predicted Probabilities (learned classes {learned_classes}): {risk_probs_learned}")
+            print(f"Full Probabilities (0-5): {risk_probs_full.tolist()}")
+
         except Exception as model_err:
-             print(f"Model prediction/preprocessing error: {str(model_err)}")
+             print(f"Pipeline prediction error: {str(model_err)}")
              import traceback
              print(traceback.format_exc())
-             return jsonify({'error': f'Lỗi trong quá trình dự đoán của mô hình (có thể do giá trị thiếu): {str(model_err)}'}), 500
+             return jsonify({'error': f'Lỗi trong quá trình dự đoán của pipeline: {str(model_err)}'}), 500
 
-        print(f"Calculated AQI result: {calculated_aqi}")
         print("-" * 20)
 
-        recommendations = get_health_recommendations(risk_level)
-        aqi_for_specific = calculated_aqi if calculated_aqi is not None else 0
-        specific_recommendations = get_specific_group_recommendations(aqi_for_specific)
+        # --- Lấy khuyến nghị ---
+        # Khuyến nghị chung, mô tả, ảnh hưởng: Dựa trên MỨC RỦI RO DỰ ĐOÁN TỪ MODEL
+        model_recommendations = get_health_recommendations(predicted_risk_level)
 
-        response = {
-            'risk_level': risk_level,
-            'risk_name': recommendations['risk_name'],
-            'color': recommendations['color'],
-            'description': recommendations['description'],
-            'health_effects': recommendations['health_effects'],
-            'recommendations': recommendations['recommendations'],
-            'specific_recommendations': recommendations['specific_recommendations'],
-            'specific_group_recommendations': specific_recommendations,
-            'risk_probabilities': risk_probs,
-            'calculated_aqi': round(calculated_aqi, 1) if calculated_aqi is not None else None
+        # Khuyến nghị theo nhóm nhạy cảm: Dựa trên CHỈ SỐ AQI TÍNH TOÁN
+        # Sử dụng giá trị 0 nếu AQI không tính được để tránh lỗi
+        aqi_for_specific_groups = calculated_aqi if calculated_aqi is not None and not math.isnan(calculated_aqi) else 0
+        specific_group_recommendations = get_specific_group_recommendations(aqi_for_specific_groups)
+
+        # --- Tạo response ---
+        response_data = {
+            'predicted_risk_level': predicted_risk_level, # Mức rủi ro từ model ML
+            'risk_name': model_recommendations['risk_name'], # Tên mức rủi ro theo model ML
+            'description': model_recommendations['description'], # Mô tả theo model ML
+            'health_effects': model_recommendations['health_effects'], # Ảnh hưởng sk theo model ML
+            'recommendations': model_recommendations['recommendations'], # Khuyến nghị chung theo model ML
+            'specific_recommendations': model_recommendations['specific_recommendations'], # Khuyến nghị cụ thể theo model ML
+            'calculated_aqi': round(calculated_aqi, 1) if calculated_aqi is not None else None, # AQI tính toán
+            'risk_probabilities': risk_probs_full.tolist(), # Xác suất đầy đủ 6 lớp từ model ML
+            'specific_group_recommendations': specific_group_recommendations # Khuyến nghị nhóm theo AQI tính toán
         }
 
-        return jsonify(response)
+        return jsonify(response_data)
 
     except ValueError as e:
         print(f"Prediction error (ValueError): {str(e)}")

@@ -227,17 +227,29 @@
             <p id="risk-description"></p>
             <p id="health-effects"></p>
             
+            <!-- Phần hiển thị kết quả dự đoán từ Model -->
+            <h3>Dự đoán Rủi ro Hô hấp (Model)</h3>
+            <p><strong>Mức độ dự đoán:</strong> <span id="model-risk-name"></span></p>
+            <p id="model-description"></p> <!-- Đổi id -->
+            <p id="model-health-effects"></p> <!-- Đổi id -->
+
             <div class="recommendations">
-                <h3>Khuyến nghị:</h3>
-                <ul id="recommendations-list"></ul>
+                <h4>Khuyến nghị chung (từ Model):</h4>
+                <ul id="model-recommendations-list"></ul> <!-- Đổi id -->
             </div>
-            
+
             <div class="specific-recommendations">
-                <h3>Khuyến nghị theo nhóm:</h3>
-                <ul id="specific-recommendations-list"></ul>
+                <h4>Khuyến nghị cụ thể (từ Model):</h4>
+                <ul id="model-specific-recommendations-list"></ul> <!-- Đổi id -->
+            </div>
+
+             <div class="specific-group-recommendations"> <!-- Thêm div mới -->
+                <h4>Khuyến nghị theo nhóm (dựa trên AQI tính toán):</h4>
+                <ul id="specific-group-recommendations-list"></ul>
             </div>
             
             <div class="chart-container">
+                <h4>Phân bố Xác suất Rủi ro (dự đoán từ Model)</h4>
                 <canvas id="risk-chart"></canvas>
             </div>
         </div>
@@ -285,30 +297,6 @@
     </div>
 
     <script>
-        /**
-         * Xác định tên mức AQI, màu sắc và màu chữ dựa trên giá trị số.
-         * @param {number|null} aqi - Giá trị AQI tính toán.
-         * @returns {object} - Object chứa tên mức ('name'), mã màu ('color'), màu chữ ('textColor').
-         */
-        function getAqiLevelInfo(aqi) {
-            if (aqi === null || aqi === undefined || isNaN(aqi)) {
-                return { name: "N/A", color: "#cccccc", textColor: "#000000" }; // Màu xám
-            }
-            if (aqi <= 50) {
-                return { name: "Tốt", color: "#a8e05f", textColor: "#333" }; // Xanh lá (Màu từ bảng)
-            } else if (aqi <= 100) {
-                return { name: "Trung bình", color: "#fdd835", textColor: "#333" }; // Vàng (Màu từ bảng)
-            } else if (aqi <= 150) {
-                return { name: "Không lành mạnh cho nhóm nhạy cảm", color: "#fb8c00", textColor: "white" }; // Cam
-            } else if (aqi <= 200) {
-                return { name: "Không lành mạnh", color: "#e53935", textColor: "white" }; // Đỏ
-            } else if (aqi <= 300) {
-                return { name: "Rất không lành mạnh", color: "#8e24aa", textColor: "white" }; // Tím
-            } else {
-                return { name: "Nguy hiểm", color: "#b71c1c", textColor: "white" }; // Nâu đỏ
-            }
-        }
-
         // Xử lý form và hiển thị kết quả
         document.getElementById('air-quality-form').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -340,101 +328,162 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error || 'Network response was not ok'); });
+                    // Cố gắng đọc lỗi JSON từ backend
+                    return response.json().then(err => {
+                        // Ưu tiên hiển thị lỗi cụ thể từ backend nếu có
+                        throw new Error(err.error || `Lỗi ${response.status}: ${response.statusText}`);
+                    }).catch(() => {
+                        // Nếu không đọc được JSON lỗi, hiển thị lỗi HTTP chung
+                         throw new Error(`Lỗi ${response.status}: ${response.statusText}`);
+                    });
                 }
                 return response.json();
             })
             .then(data => {
+                // Kiểm tra lỗi logic từ backend (ví dụ: model không load được)
                 if (data.error) {
-                    console.error('Backend Error:', data.error);
-                    alert(`Lỗi: ${data.error}`);
+                    console.error('Backend Logic Error:', data.error);
+                    alert(`Lỗi từ máy chủ: ${data.error}`);
                     document.getElementById('results').style.display = 'none';
                 } else {
-                    displayResults(data);
+                    displayResults(data); // Gọi hàm hiển thị kết quả
                 }
             })
             .catch(error => {
                 console.error('Fetch Error:', error);
-                alert(`Có lỗi xảy ra: ${error.message}. Vui lòng thử lại sau.`);
+                // Hiển thị lỗi thân thiện hơn cho người dùng
+                alert(`Không thể nhận kết quả: ${error.message}. Vui lòng kiểm tra lại thông tin nhập hoặc thử lại sau.`);
                 document.getElementById('results').style.display = 'none';
             });
         });
 
-        // Hiển thị kết quả
         function displayResults(data) {
-            document.getElementById('results').style.display = 'block';
+            document.getElementById('results').style.display = 'block'; // Hiển thị khu vực kết quả
 
-            // Lấy AQI đã tính toán từ backend
+            // --- Hiển thị AQI tính toán ---
             const calculatedAqi = data.calculated_aqi;
+            document.getElementById('aqi-value').textContent = `AQI Tính Toán: ${calculatedAqi !== null && calculatedAqi !== undefined ? calculatedAqi.toFixed(1) : 'N/A'}`;
 
-            // Hiển thị giá trị AQI (làm tròn 1 chữ số thập phân nếu có)
-            document.getElementById('aqi-value').textContent = `AQI: ${calculatedAqi !== null ? calculatedAqi.toFixed(1) : 'N/A'}`;
+            // Lấy thông tin mức AQI (tên, màu) dựa trên giá trị AQI tính toán
+            const aqiLevelInfo = getAqiLevelInfo(calculatedAqi); // Gọi hàm helper
+            const aqiIndicator = document.getElementById('aqi-level-indicator');
+            aqiIndicator.textContent = aqiLevelInfo.name; // Hiển thị tên mức AQI
+            aqiIndicator.style.backgroundColor = aqiLevelInfo.color; // Đặt màu nền
+            aqiIndicator.style.color = aqiLevelInfo.textColor; // Đặt màu chữ
 
-            // Xác định thông tin mức độ (tên, màu) DỰA TRÊN AQI ĐÃ TÍNH TOÁN
-            const aqiLevelInfo = getAqiLevelInfo(calculatedAqi);
+            // --- Hiển thị kết quả từ Model ---
+            document.getElementById('model-risk-name').textContent = data.risk_name || 'N/A'; // Tên mức rủi ro model dự đoán
+            document.getElementById('model-description').textContent = data.description || 'Không có mô tả.'; // Mô tả từ model
+            document.getElementById('model-health-effects').textContent = data.health_effects || 'Không có thông tin ảnh hưởng sức khỏe.'; // Ảnh hưởng từ model
 
-            // Cập nhật tên mức độ và màu sắc
-            const riskLevelElement = document.getElementById('risk-level');
-            riskLevelElement.textContent = aqiLevelInfo.name; // Lấy tên từ aqiLevelInfo
-            riskLevelElement.style.backgroundColor = aqiLevelInfo.color; // Lấy màu nền từ aqiLevelInfo
-            riskLevelElement.style.color = aqiLevelInfo.textColor; // Lấy màu chữ từ aqiLevelInfo
+            // Khuyến nghị chung từ model
+            const modelRecommendationsList = document.getElementById('model-recommendations-list');
+            modelRecommendationsList.innerHTML = ''; // Xóa nội dung cũ
+            if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+                data.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    modelRecommendationsList.appendChild(li);
+                });
+            } else {
+                modelRecommendationsList.innerHTML = '<li>Không có khuyến nghị chung từ model.</li>';
+            }
 
-            document.getElementById('risk-description').textContent = data.description;
-            document.getElementById('health-effects').textContent = data.health_effects;
+            // Khuyến nghị cụ thể từ model
+            const modelSpecificList = document.getElementById('model-specific-recommendations-list');
+            modelSpecificList.innerHTML = ''; // Xóa nội dung cũ
+            if (data.specific_recommendations && typeof data.specific_recommendations === 'object' && Object.keys(data.specific_recommendations).length > 0) {
+                 for (const [group, recommendation] of Object.entries(data.specific_recommendations)) {
+                    const li = document.createElement('li');
+                    // Sử dụng innerHTML để hiển thị đậm tên nhóm
+                    li.innerHTML = `<strong>${group}:</strong> ${recommendation}`;
+                    modelSpecificList.appendChild(li);
+                }
+            } else {
+                 modelSpecificList.innerHTML = '<li>Không có khuyến nghị cụ thể từ model.</li>';
+            }
 
-            const recommendationsList = document.getElementById('recommendations-list');
-            recommendationsList.innerHTML = '';
-            data.recommendations.forEach(rec => {
-                const li = document.createElement('li');
-                li.textContent = rec;
-                recommendationsList.appendChild(li);
-            });
-
-            const specificRecommendationsList = document.getElementById('specific-recommendations-list');
-            specificRecommendationsList.innerHTML = '';
-
-            if (data.specific_group_recommendations && typeof data.specific_group_recommendations === 'object') {
+             // Khuyến nghị theo nhóm dựa trên AQI tính toán
+            const specificGroupList = document.getElementById('specific-group-recommendations-list');
+            specificGroupList.innerHTML = ''; // Xóa nội dung cũ
+            if (data.specific_group_recommendations && typeof data.specific_group_recommendations === 'object' && Object.keys(data.specific_group_recommendations).length > 0) {
                 for (const [group, recommendation] of Object.entries(data.specific_group_recommendations)) {
                     const li = document.createElement('li');
                     li.innerHTML = `<strong>${group}:</strong> ${recommendation}`;
-                    specificRecommendationsList.appendChild(li);
+                    specificGroupList.appendChild(li);
                 }
             } else {
-                console.warn("Specific group recommendations data is missing or not an object:", data.specific_group_recommendations);
+                specificGroupList.innerHTML = '<li>Không có khuyến nghị theo nhóm dựa trên AQI.</li>';
             }
 
-            const probLabels = ['Tốt', 'Trung bình', 'Không lành mạnh cho nhóm nhạy cảm', 'Không lành mạnh', 'Rất không lành mạnh', 'Nguy hiểm'];
-            const chartLabels = probLabels.slice(0, data.risk_probabilities.length);
 
-            if (window.riskChart) {
+            // --- Cập nhật biểu đồ xác suất từ Model ---
+            const probLabels = ['Tốt', 'Trung bình', 'Không lành mạnh cho nhóm nhạy cảm', 'Không lành mạnh', 'Rất không lành mạnh', 'Nguy hiểm'];
+            // Đảm bảo data.risk_probabilities là một mảng hợp lệ và đủ 6 phần tử (nếu thiếu sẽ là 0)
+            const probabilities = Array.isArray(data.risk_probabilities) && data.risk_probabilities.length === 6
+                                    ? data.risk_probabilities
+                                    : [0, 0, 0, 0, 0, 0]; // Mặc định nếu dữ liệu không đúng
+
+            const chartData = probabilities.map(p => (typeof p === 'number' && !isNaN(p) ? p * 100 : 0)); // Chuyển đổi sang % và xử lý NaN/undefined
+
+            // Hủy biểu đồ cũ nếu tồn tại
+            if (window.riskChart instanceof Chart) {
                 window.riskChart.destroy();
             }
 
+            // Vẽ biểu đồ mới
             const ctx = document.getElementById('risk-chart').getContext('2d');
             window.riskChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: chartLabels,
+                    labels: probLabels, // Luôn hiển thị đủ 6 nhãn
                     datasets: [{
                         label: 'Xác suất rủi ro sức khỏe (%)',
-                        data: data.risk_probabilities.map(p => p * 100),
+                        data: chartData, // Dữ liệu đã xử lý
                         backgroundColor: [
                             '#a8e05f', '#fdd835', '#fb8c00',
                             '#e53935', '#8e24aa', '#b71c1c'
-                        ].slice(0, data.risk_probabilities.length)
+                        ] // Luôn đủ 6 màu
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: false, // Cho phép biểu đồ thay đổi tỷ lệ
+                    indexAxis: 'x', // Trục x là các mức độ
                     scales: {
-                        y: {
+                        y: { // Trục y là xác suất
                             beginAtZero: true,
                             max: 100,
                             title: {
                                 display: true,
                                 text: 'Xác suất (%)'
                             }
+                        },
+                        x: { // Trục x là các mức độ
+                             title: {
+                                display: true,
+                                text: 'Mức Độ Rủi Ro Sức Khỏe'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        // Hiển thị 2 chữ số thập phân
+                                        label += context.parsed.y.toFixed(2) + '%';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                         legend: {
+                            display: true // Hiển thị chú giải
                         }
                     }
                 }
