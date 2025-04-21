@@ -1,7 +1,8 @@
 function submitPredictionForm(event) {
-    event.preventDefault(); // Ngăn chặn hành vi mặc định của form
+    event.preventDefault();
 
-    // Lấy giá trị từ các input
+// Lấy giá trị từ các input
+
     const pm25Value = document.getElementById('pm25').value;
     const pm10Value = document.getElementById('pm10').value;
     const no2Value = document.getElementById('no2').value;
@@ -12,23 +13,23 @@ function submitPredictionForm(event) {
     const temperatureValue = document.getElementById('temperature').value;
     const windValue = document.getElementById('wind').value;
 
-    // Lấy đơn vị từ các select (thay ID nếu cần)
-    const no2Unit = document.getElementById('no2_unit').value; // Giả sử ID là 'no2_unit'
-    const coUnit = document.getElementById('co_unit').value;   // Giả sử ID là 'co_unit'
-    const o3Unit = document.getElementById('o3_unit').value;   // Giả sử ID là 'o3_unit'
-    const so2Unit = document.getElementById('so2_unit').value; // Giả sử ID là 'so2_unit'
+// Lấy đơn vị từ các select (thay ID nếu cần)
+    const no2Unit = document.getElementById('no2_unit').value; 
+    const coUnit = document.getElementById('co_unit').value;   
+    const o3Unit = document.getElementById('o3_unit').value;   
+    const so2Unit = document.getElementById('so2_unit').value; 
 
     const formData = {
         pm25: pm25Value,
         pm10: pm10Value,
         no2: no2Value,
-        no2_unit: no2Unit, // Thêm đơn vị NO2
+        no2_unit: no2Unit,
         co: coValue,
-        co_unit: coUnit,   // Thêm đơn vị CO
+        co_unit: coUnit,
         o3: o3Value,
-        o3_unit: o3Unit,   // Thêm đơn vị O3
+        o3_unit: o3Unit,
         so2: so2Value,
-        so2_unit: so2Unit, // Thêm đơn vị SO2
+        so2_unit: so2Unit,
         humidity: humidityValue,
         temperature: temperatureValue,
         wind: windValue
@@ -37,7 +38,7 @@ function submitPredictionForm(event) {
     fetch('/api/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData) // Gửi đi formData đã bao gồm đơn vị
+        body: JSON.stringify(formData)
     })
     .then(response => {
         if (!response.ok) {
@@ -110,16 +111,11 @@ function submitPredictionForm(event) {
     });
 }
 
-/**
- * Xác định tên mức AQI và màu sắc dựa trên giá trị số.
- * @param {number|null} aqi - Giá trị AQI tính toán.
- * @returns {object} - Object chứa tên mức ('name') và mã màu ('color').
- */
 function getAqiLevelInfo(aqi) {
     if (aqi === null || aqi === undefined || isNaN(aqi)) {
         return { name: "N/A", color: "#cccccc", textColor: "#000000" };
     }
-    aqi = Math.round(aqi); // Làm tròn AQI để so sánh
+    aqi = Math.round(aqi);
     if (aqi <= 50) return { name: "Tốt", color: "#a8e05f", textColor: "#33691e" };
     if (aqi <= 100) return { name: "Trung bình", color: "#fdd835", textColor: "#424242" };
     if (aqi <= 150) return { name: "Không lành mạnh cho nhóm nhạy cảm", color: "#fb8c00", textColor: "white" };
@@ -128,20 +124,16 @@ function getAqiLevelInfo(aqi) {
     return { name: "Nguy hiểm", color: "#b71c1c", textColor: "white" };
 }
 
-// Đảm bảo DOM đã tải xong trước khi thêm event listener
 document.addEventListener('DOMContentLoaded', (event) => {
-    const predictionForm = document.getElementById('predictionForm'); // Thay 'predictionForm' bằng ID thực tế của form
+    const predictionForm = document.getElementById('predictionForm');
     if (predictionForm) {
         predictionForm.addEventListener('submit', submitPredictionForm);
     } else {
         console.error("Không tìm thấy form với ID 'predictionForm'.");
-        // Hoặc thử gắn vào nút nếu không dùng form submit
-        const predictButton = document.getElementById('predictButton'); // Thay 'predictButton' bằng ID thực tế của nút
+        const predictButton = document.getElementById('predictButton');
         if (predictButton) {
              predictButton.addEventListener('click', (clickEvent) => {
-                 // Nếu nút không phải type="submit", bạn có thể cần ngăn chặn hành vi mặc định khác nếu có
-                 // clickEvent.preventDefault(); // Bỏ comment nếu cần
-                 submitPredictionForm(clickEvent); // Truyền sự kiện click vào hàm
+                 submitPredictionForm(clickEvent);
              });
         } else {
              console.error("Không tìm thấy nút với ID 'predictButton'.");

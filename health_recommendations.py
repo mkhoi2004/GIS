@@ -1,8 +1,6 @@
 import pandas as pd
 
-#Sử dụng mô hình để đưa ra dự đoán và khuyến nghị
-
-
+# Lấy khuyến nghị sức khỏe chung dựa trên mức độ rủi ro (0-5).
 def get_health_recommendations(risk_level):
     recommendations = {
         0: {
@@ -109,13 +107,13 @@ def get_health_recommendations(risk_level):
         }
     }
     
+    # Trả về khuyến nghị cho mức rủi ro cụ thể, hoặc thông tin mặc định nếu không tìm thấy.
     return recommendations.get(risk_level, {"risk_name": "Không xác định", "description": "Không có dữ liệu", "recommendations": []})
 
-# Hàm lấy khuyến nghị cụ thể cho từng nhóm đối tượng dựa trên mức AQI
+# Lấy khuyến nghị sức khỏe cho các nhóm đối tượng cụ thể dựa trên giá trị AQI.
 def get_specific_group_recommendations(aqi_value):
-    # Kiểm tra đầu vào, trả về thông báo nếu không hợp lệ
+    # Kiểm tra và xử lý giá trị AQI đầu vào không hợp lệ.
     if pd.isna(aqi_value) or isinstance(aqi_value, str) and not aqi_value.replace('.', '', 1).isdigit():
-        # Trả về dict rỗng hoặc thông báo lỗi cho từng nhóm nếu AQI không hợp lệ
         default_message = "Không có dữ liệu AQI hợp lệ để đưa ra khuyến nghị."
         return {
             "Người khỏe mạnh": default_message,
@@ -127,7 +125,6 @@ def get_specific_group_recommendations(aqi_value):
     try:
         aqi = float(aqi_value)
     except (ValueError, TypeError):
-        # Xử lý trường hợp không thể chuyển đổi sang float
         default_message = "Giá trị AQI không hợp lệ."
         return {
             "Người khỏe mạnh": default_message,
@@ -136,7 +133,7 @@ def get_specific_group_recommendations(aqi_value):
             "Người mắc bệnh hô hấp": default_message
         }
 
-
+    # Dữ liệu khuyến nghị cho từng nhóm dựa trên các khoảng AQI.
     recommendations = {
         "Người khỏe mạnh": {
             "advice": {
@@ -172,24 +169,27 @@ def get_specific_group_recommendations(aqi_value):
     result = {}
     default_advice = "Không có khuyến nghị cụ thể cho mức AQI này."
 
+    # Lặp qua từng nhóm để xác định khuyến nghị phù hợp với giá trị AQI.
     for group, info in recommendations.items():
         advice_dict = info.get("advice", {})
         selected_advice = default_advice
 
         try:
+            # Xác định khoảng AQI và lấy khuyến nghị tương ứng.
             if aqi <= 50:
                 selected_advice = advice_dict.get("0-50", default_advice)
             elif aqi <= 100:
                 selected_advice = advice_dict.get("51-100", default_advice)
-            elif aqi <= 150 and group == "Người khỏe mạnh":
+            elif aqi <= 150 and group == "Người khỏe mạnh": # Khoảng riêng cho người khỏe mạnh
                 selected_advice = advice_dict.get("101-150", default_advice)
-            else:
+            else: # Các trường hợp AQI cao hơn
                 key_to_use = "151+" if group == "Người khỏe mạnh" else "101+"
                 selected_advice = advice_dict.get(key_to_use, default_advice)
 
             result[group] = selected_advice
 
         except Exception as e:
+            # Xử lý lỗi nếu có.
             print(f"Unexpected error processing group '{group}': {str(e)}")
             result[group] = "Đã xảy ra lỗi khi lấy khuyến nghị."
 

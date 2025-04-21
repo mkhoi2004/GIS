@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchResults = document.getElementById('search-results');
     let locations = [];
 
-    // Danh sách ánh xạ URL tùy chỉnh
     const customUrls = {
         "Cần Thơ": "https://aqicn.org/city/vietnam/can-tho/ninh-kieu-kttv-tram-cam-bien/",
         "Trà Vinh": "https://aqicn.org/city/vietnam/tra-vinh/xa-dan-thanh--tx-duyen-hai/",
@@ -143,19 +142,17 @@ document.addEventListener('DOMContentLoaded', function () {
         "Østerbro, Aalborg": "https://duhocblueocean.vn/1191-du-hoc-dan-mach-nen-chon-thanh-pho-nao-.boe"
     };
 
-    // Hàm xác định màu sắc dựa trên giá trị AQI
     function getColor(aqi) {
         if (aqi === 'N/A') return '#gray';
         aqi = parseInt(aqi);
-        if (aqi <= 50) return '#00e400'; // Tốt
-        if (aqi <= 100) return '#ffff00'; // Trung bình
-        if (aqi <= 150) return '#ff7e00'; // Không lành mạnh cho nhóm nhạy cảm
-        if (aqi <= 200) return '#ff0000'; // Không lành mạnh
-        if (aqi <= 300) return '#8f3f97'; // Rất không lành mạnh
-        return '#7e0023'; // Nguy hiểm
+        if (aqi <= 50) return '#00e400';
+        if (aqi <= 100) return '#ffff00';
+        if (aqi <= 150) return '#ff7e00';
+        if (aqi <= 200) return '#ff0000';
+        if (aqi <= 300) return '#8f3f97';
+        return '#7e0023';
     }
 
-    // Hàm đánh giá sức khỏe dựa trên AQI
     function getHealthImpact(aqi) {
         if (aqi === 'N/A') return 'Không có dữ liệu để đánh giá.';
         aqi = parseInt(aqi);
@@ -167,7 +164,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return 'Nguy hiểm: Toàn bộ dân số có nguy cơ cao gặp vấn đề hô hấp nghiêm trọng, có thể gây tổn thương phổi.';
     }
 
-    // Hàm tính thời gian "updated X hours ago"
     function getTimeAgo(updateTime) {
         if (updateTime === 'N/A') return 'Không có dữ liệu';
         const updateDate = new Date(updateTime);
@@ -178,12 +174,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return `updated ${diffInHours} hours ago (${updateTime})`;
     }
 
-    // Hàm lấy dữ liệu AQI từ backend
     function fetchAQIData() {
         fetch('/aqi')
             .then(response => response.json())
             .then(data => {
-                locations = data; // Lưu danh sách địa điểm để tìm kiếm
+                locations = data;
                 data.forEach(location => {
                     const marker = L.circleMarker([location.lat, location.lon], {
                         radius: 8,
@@ -194,19 +189,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         fillOpacity: 0.8
                     }).addTo(map);
 
-                    // Xác định URL tùy chỉnh cho "Xem chi tiết"
                     let moreInfoUrl = customUrls[location.name] || 
                                      `https://aqicn.org/city/${location.name.toLowerCase().replace(/\s+/g, '-')}`;
-
-                    // Xác định URL tùy chỉnh cho "Xem blog"
                     let blogUrl = blogUrls[location.name] || 
                                   `/blog/${location.name.toLowerCase().replace(/\s+/g, '-')}`;
-
-                    // Xác định URL tùy chỉnh cho "Xem khu vực lịch sử"
                     let historyUrl = historyUrls[location.name] || 
                                     `/history/${location.name.toLowerCase().replace(/\s+/g, '-')}`;
 
-                    // Tạo nội dung popup
                     marker.bindPopup(`
                         <div class="popup-content">
                             <h3>${location.name} (${location.country})</h3>
@@ -238,7 +227,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => console.error('Error fetching AQI data:', error));
     }
 
-    // Xử lý tìm kiếm
     searchInput.addEventListener('input', function () {
         const query = searchInput.value.toLowerCase();
         searchResults.innerHTML = '';
@@ -252,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const li = document.createElement('li');
                 li.textContent = `${location.name} (${location.country})`;
                 li.addEventListener('click', function () {
-                    map.setView([location.lat, location.lon], 10); // Zoom đến vị trí thành phố
+                    map.setView([location.lat, location.lon], 10);
                     searchResults.innerHTML = '';
                     searchInput.value = '';
                 });
@@ -261,9 +249,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Gọi hàm lấy dữ liệu khi trang tải
     fetchAQIData();
 
-    // Cập nhật dữ liệu mỗi 1 giờ
     setInterval(fetchAQIData, 3600000);
 });

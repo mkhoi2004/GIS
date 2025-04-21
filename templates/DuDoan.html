@@ -6,10 +6,8 @@
     <title>Đánh giá rủi ro sức khỏe hô hấp từ dữ liệu không khí</title>
     <link rel="stylesheet" href="/static/css/DuDoan.css">
     <link rel="icon" href="/static/favicon.ico">
-    <!-- Thêm thư viện Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* CSS cơ bản nếu file DuDoan.css không hoạt động */
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
@@ -57,7 +55,7 @@
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            box-sizing: border-box; /* Thêm dòng này */
+            box-sizing: border-box;
         }
         button {
             background-color: #27ae60;
@@ -100,21 +98,21 @@
         .form-group-inline {
             display: flex;
             gap: 10px;
-            align-items: baseline; /* Căn chỉnh theo baseline */
-            margin-bottom: 15px; /* Thêm lại margin bottom nếu cần */
+            align-items: baseline;
+            margin-bottom: 15px;
         }
         .input-wrapper, .unit-wrapper {
-            flex: 1; /* Giữ nguyên để chia đều không gian */
+            flex: 1;
         }
         .unit-wrapper select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            box-sizing: border-box; /* Đảm bảo padding không làm tăng kích thước */
+            box-sizing: border-box;
         }
         .form-group-inline label {
-            margin-bottom: 5px; /* Giữ khoảng cách với input/select */
+            margin-bottom: 5px;
         }
     </style>
 </head>
@@ -132,7 +130,6 @@
             <span class="toolbar-icon" style="font-size: 24px;">📍</span>
             <span class="toolbar-text">Bản đồ AQI</span>
         </a>
-       
     </div>
     <div class="container">
         <div class="card">
@@ -241,23 +238,22 @@
             <p id="risk-description"></p>
             <p id="health-effects"></p>
             
-            <!-- Phần hiển thị kết quả dự đoán từ Model -->
             <h3>Dự đoán Rủi ro Hô hấp (Model)</h3>
             <p><strong>Mức độ dự đoán:</strong> <span id="model-risk-name"></span></p>
-            <p id="model-description"></p> <!-- Đổi id -->
-            <p id="model-health-effects"></p> <!-- Đổi id -->
+            <p id="model-description"></p>
+            <p id="model-health-effects"></p>
 
             <div class="recommendations">
                 <h4>Khuyến nghị chung (từ Model):</h4>
-                <ul id="model-recommendations-list"></ul> <!-- Đổi id -->
+                <ul id="model-recommendations-list"></ul>
             </div>
 
             <div class="specific-recommendations">
                 <h4>Khuyến nghị cụ thể (từ Model):</h4>
-                <ul id="model-specific-recommendations-list"></ul> <!-- Đổi id -->
+                <ul id="model-specific-recommendations-list"></ul>
             </div>
 
-             <div class="specific-group-recommendations"> <!-- Thêm div mới -->
+             <div class="specific-group-recommendations">
                 <h4>Khuyến nghị theo nhóm (dựa trên AQI tính toán):</h4>
                 <ul id="specific-group-recommendations-list"></ul>
             </div>
@@ -311,31 +307,28 @@
     </div>
 
     <script>
-        
         function getAqiLevelInfo(aqi) {
             if (aqi === null || aqi === undefined || isNaN(aqi)) {
-                return { name: 'N/A', color: '#cccccc', textColor: '#000000' }; // Màu xám cho N/A
+                return { name: 'N/A', color: '#cccccc', textColor: '#000000' };
             }
             if (aqi <= 50) {
-                return { name: 'Tốt', color: '#a8e05f', textColor: '#33691e' }; // Xanh lá
+                return { name: 'Tốt', color: '#a8e05f', textColor: '#33691e' };
             } else if (aqi <= 100) {
-                return { name: 'Trung bình', color: '#fdd835', textColor: '#424242' }; // Vàng
+                return { name: 'Trung bình', color: '#fdd835', textColor: '#424242' };
             } else if (aqi <= 150) {
-                return { name: 'Không lành mạnh cho nhóm nhạy cảm', color: '#fb8c00', textColor: 'white' }; // Cam
+                return { name: 'Không lành mạnh cho nhóm nhạy cảm', color: '#fb8c00', textColor: 'white' };
             } else if (aqi <= 200) {
-                return { name: 'Không lành mạnh', color: '#e53935', textColor: 'white' }; // Đỏ
+                return { name: 'Không lành mạnh', color: '#e53935', textColor: 'white' };
             } else if (aqi <= 300) {
-                return { name: 'Rất không lành mạnh', color: '#8e24aa', textColor: 'white' }; // Tím
+                return { name: 'Rất không lành mạnh', color: '#8e24aa', textColor: 'white' };
             } else {
-                return { name: 'Nguy hiểm', color: '#b71c1c', textColor: 'white' }; // Nâu đỏ
+                return { name: 'Nguy hiểm', color: '#b71c1c', textColor: 'white' };
             }
         }
-        
-        // Xử lý form và hiển thị kết quả
+
         document.getElementById('air-quality-form').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Thu thập dữ liệu từ form bao gồm cả đơn vị
             const formData = {
                 pm25: document.getElementById('pm25').value,
                 pm10: document.getElementById('pm10').value,
@@ -350,10 +343,9 @@
                 humidity: document.getElementById('humidity').value,
                 temperature: document.getElementById('temperature').value,
                 wind: document.getElementById('wind').value,
-                wind_unit: document.getElementById('wind-unit').value // <-- Thêm dòng này
+                wind_unit: document.getElementById('wind-unit').value
             };
 
-            // Gửi dữ liệu đến API
             fetch('/api/predict', {
                 method: 'POST',
                 headers: {
@@ -363,57 +355,48 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    // Cố gắng đọc lỗi JSON từ backend
                     return response.json().then(err => {
-                        // Ưu tiên hiển thị lỗi cụ thể từ backend nếu có
                         throw new Error(err.error || `Lỗi ${response.status}: ${response.statusText}`);
                     }).catch(() => {
-                        // Nếu không đọc được JSON lỗi, hiển thị lỗi HTTP chung
                          throw new Error(`Lỗi ${response.status}: ${response.statusText}`);
                     });
                 }
                 return response.json();
             })
             .then(data => {
-                // Kiểm tra lỗi logic từ backend (ví dụ: model không load được)
                 if (data.error) {
                     console.error('Backend Logic Error:', data.error);
                     alert(`Lỗi từ máy chủ: ${data.error}`);
                     document.getElementById('results').style.display = 'none';
                 } else {
-                    displayResults(data); // Gọi hàm hiển thị kết quả
+                    displayResults(data);
                 }
             })
             .catch(error => {
                 console.error('Fetch Error:', error);
-                // Hiển thị lỗi thân thiện hơn cho người dùng
                 alert(`Không thể nhận kết quả: ${error.message}. Vui lòng kiểm tra lại thông tin nhập hoặc thử lại sau.`);
                 document.getElementById('results').style.display = 'none';
             });
         });
 
         function displayResults(data) {
-            document.getElementById('results').style.display = 'block'; // Hiển thị khu vực kết quả
+            document.getElementById('results').style.display = 'block';
 
-            // --- Hiển thị AQI tính toán ---
             const calculatedAqi = data.calculated_aqi;
             document.getElementById('aqi-value').textContent = `AQI Tính Toán: ${calculatedAqi !== null && calculatedAqi !== undefined ? calculatedAqi.toFixed(1) : 'N/A'}`;
 
-            // Lấy thông tin mức AQI (tên, màu) dựa trên giá trị AQI tính toán
-            const aqiLevelInfo = getAqiLevelInfo(calculatedAqi); // Gọi hàm helper
-            const aqiIndicator = document.getElementById('risk-level'); // Sửa ID thành 'risk-level'
-            aqiIndicator.textContent = aqiLevelInfo.name; // Hiển thị tên mức AQI
-            aqiIndicator.style.backgroundColor = aqiLevelInfo.color; // Đặt màu nền
-            aqiIndicator.style.color = aqiLevelInfo.textColor; // Đặt màu chữ
+            const aqiLevelInfo = getAqiLevelInfo(calculatedAqi);
+            const aqiIndicator = document.getElementById('risk-level');
+            aqiIndicator.textContent = aqiLevelInfo.name;
+            aqiIndicator.style.backgroundColor = aqiLevelInfo.color;
+            aqiIndicator.style.color = aqiLevelInfo.textColor;
 
-            // --- Hiển thị kết quả từ Model ---
-            document.getElementById('model-risk-name').textContent = data.risk_name || 'N/A'; // Tên mức rủi ro model dự đoán
-            document.getElementById('model-description').textContent = data.description || 'Không có mô tả.'; // Mô tả từ model
-            document.getElementById('model-health-effects').textContent = data.health_effects || 'Không có thông tin ảnh hưởng sức khỏe.'; // Ảnh hưởng từ model
+            document.getElementById('model-risk-name').textContent = data.risk_name || 'N/A';
+            document.getElementById('model-description').textContent = data.description || 'Không có mô tả.';
+            document.getElementById('model-health-effects').textContent = data.health_effects || 'Không có thông tin ảnh hưởng sức khỏe.';
 
-            // Khuyến nghị chung từ model
             const modelRecommendationsList = document.getElementById('model-recommendations-list');
-            modelRecommendationsList.innerHTML = ''; // Xóa nội dung cũ
+            modelRecommendationsList.innerHTML = '';
             if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
                 data.recommendations.forEach(rec => {
                     const li = document.createElement('li');
@@ -424,13 +407,11 @@
                 modelRecommendationsList.innerHTML = '<li>Không có khuyến nghị chung từ model.</li>';
             }
 
-            // Khuyến nghị cụ thể từ model
             const modelSpecificList = document.getElementById('model-specific-recommendations-list');
-            modelSpecificList.innerHTML = ''; // Xóa nội dung cũ
+            modelSpecificList.innerHTML = '';
             if (data.specific_recommendations && typeof data.specific_recommendations === 'object' && Object.keys(data.specific_recommendations).length > 0) {
                  for (const [group, recommendation] of Object.entries(data.specific_recommendations)) {
                     const li = document.createElement('li');
-                    // Sử dụng innerHTML để hiển thị đậm tên nhóm
                     li.innerHTML = `<strong>${group}:</strong> ${recommendation}`;
                     modelSpecificList.appendChild(li);
                 }
@@ -438,9 +419,8 @@
                  modelSpecificList.innerHTML = '<li>Không có khuyến nghị cụ thể từ model.</li>';
             }
 
-             // Khuyến nghị theo nhóm dựa trên AQI tính toán
             const specificGroupList = document.getElementById('specific-group-recommendations-list');
-            specificGroupList.innerHTML = ''; // Xóa nội dung cũ
+            specificGroupList.innerHTML = '';
             if (data.specific_group_recommendations && typeof data.specific_group_recommendations === 'object' && Object.keys(data.specific_group_recommendations).length > 0) {
                 for (const [group, recommendation] of Object.entries(data.specific_group_recommendations)) {
                     const li = document.createElement('li');
@@ -451,42 +431,37 @@
                 specificGroupList.innerHTML = '<li>Không có khuyến nghị theo nhóm dựa trên AQI.</li>';
             }
 
-
-            // --- Cập nhật biểu đồ xác suất từ Model ---
             const probLabels = ['Tốt', 'Trung bình', 'Không lành mạnh cho nhóm nhạy cảm', 'Không lành mạnh', 'Rất không lành mạnh', 'Nguy hiểm'];
-            // Đảm bảo data.risk_probabilities là một mảng hợp lệ và đủ 6 phần tử (nếu thiếu sẽ là 0)
             const probabilities = Array.isArray(data.risk_probabilities) && data.risk_probabilities.length === 6
                                     ? data.risk_probabilities
-                                    : [0, 0, 0, 0, 0, 0]; // Mặc định nếu dữ liệu không đúng
+                                    : [0, 0, 0, 0, 0, 0];
 
-            const chartData = probabilities.map(p => (typeof p === 'number' && !isNaN(p) ? p * 100 : 0)); // Chuyển đổi sang % và xử lý NaN/undefined
+            const chartData = probabilities.map(p => (typeof p === 'number' && !isNaN(p) ? p * 100 : 0));
 
-            // Hủy biểu đồ cũ nếu tồn tại
             if (window.riskChart instanceof Chart) {
                 window.riskChart.destroy();
             }
 
-            // Vẽ biểu đồ mới
             const ctx = document.getElementById('risk-chart').getContext('2d');
             window.riskChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: probLabels, // Luôn hiển thị đủ 6 nhãn
+                    labels: probLabels,
                     datasets: [{
                         label: 'Xác suất rủi ro sức khỏe (%)',
-                        data: chartData, // Dữ liệu đã xử lý
+                        data: chartData,
                         backgroundColor: [
                             '#a8e05f', '#fdd835', '#fb8c00',
                             '#e53935', '#8e24aa', '#b71c1c'
-                        ] // Luôn đủ 6 màu
+                        ]
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false, // Cho phép biểu đồ thay đổi tỷ lệ
-                    indexAxis: 'x', // Trục x là các mức độ
+                    maintainAspectRatio: false,
+                    indexAxis: 'x',
                     scales: {
-                        y: { // Trục y là xác suất
+                        y: {
                             beginAtZero: true,
                             max: 100,
                             title: {
@@ -494,7 +469,7 @@
                                 text: 'Xác suất (%)'
                             }
                         },
-                        x: { // Trục x là các mức độ
+                        x: {
                              title: {
                                 display: true,
                                 text: 'Mức Độ Rủi Ro Sức Khỏe'
@@ -510,7 +485,6 @@
                                         label += ': ';
                                     }
                                     if (context.parsed.y !== null) {
-                                        // Hiển thị 2 chữ số thập phân
                                         label += context.parsed.y.toFixed(2) + '%';
                                     }
                                     return label;
@@ -518,7 +492,7 @@
                             }
                         },
                          legend: {
-                            display: true // Hiển thị chú giải
+                            display: true
                         }
                     }
                 }

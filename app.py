@@ -12,17 +12,20 @@ from health_recommendations import get_health_recommendations, get_specific_grou
 import math
 import numpy as np
 
+
+
+# Tải biến môi trường từ file .env
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')
 
-# Kết nối MongoDB
+# Kết nối tới MongoDB
 client = MongoClient(os.getenv('MONGO_URI', 'mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/'))
 db = client['GIS']
 collection = db['DataAQI']
 
-# --- HÀM CHUYỂN ĐỔI ĐƠN VỊ ---
-# Khối lượng phân tử (g/mol)
+
+# Khối lượng mol của các chất ô nhiễm (g/mol)
 MW = {
     'co': 28.01,
     'no2': 46.01,
@@ -30,11 +33,11 @@ MW = {
     'so2': 64.07
 }
 
-# Thể tích mol chuẩn (L/mol) ở 25°C, 1 atm
+# Thể tích mol chuẩn (L/mol) ở điều kiện tiêu chuẩn (25°C, 1 atm)
 MOLAR_VOLUME = 24.45
 
+# Chuyển đổi đơn vị từ ug/m3 sang ppm và ppb
 def ugm3_to_ppm(value_ugm3, mw):
-    """Chuyển đổi µg/m³ sang ppm."""
     if value_ugm3 is None or mw is None or mw == 0:
         return None
     try:
@@ -46,7 +49,6 @@ def ugm3_to_ppm(value_ugm3, mw):
         return None
 
 def ugm3_to_ppb(value_ugm3, mw):
-    """Chuyển đổi µg/m³ sang ppb."""
     value_ppm = ugm3_to_ppm(value_ugm3, mw)
     if value_ppm is None:
         return None
@@ -57,8 +59,8 @@ def ugm3_to_ppb(value_ugm3, mw):
         return value_ppb
     except (ValueError, TypeError):
         return None
-# --- KẾT THÚC HÀM CHUYỂN ĐỔI ---
 
+# Danh sách các địa điểm và URL API tương ứng để lấy dữ liệu AQI
 locations = {
     "Vietnam": [
         {"name": "Hà Nội", "url": "https://api.waqi.info/feed/A476341/?token=e31f457d039504a9b5e5c087c41ce3bf604b755a", "lat": 21.0044, "lon": 105.8432, "population": 8500000, "area": 3358.6},
@@ -108,10 +110,11 @@ locations = {
     ]
 }
 
-# Cache để giảm tải API
+# Bộ nhớ đệm để lưu trữ dữ liệu AQI đã lấy
 cache = {}
-CACHE_DURATION = 3600  # 1 giờ
+CACHE_DURATION = 3600
 
+# Hàm lấy dữ liệu AQI cho một thành phố
 def fetch_city_data(city, country):
     current_time = time.time()
     if city['name'] in cache and (current_time - cache[city['name']]['timestamp']) < CACHE_DURATION:
@@ -154,9 +157,7 @@ def fetch_city_data(city, country):
             'saved_at': datetime.now().strftime('%H:%M %d/%m/%Y')
         }
 
-        # Lưu vào cache
         cache[city['name']] = {'data': city_data, 'timestamp': current_time}
-        # Lưu vào MongoDB
         collection.insert_one(city_data.copy())
         return city_data
     except Exception as e:
@@ -184,8 +185,10 @@ def fetch_city_data(city, country):
         return city_data
 
 API_KEY = os.getenv('API_KEY')
+# URL của API Gemini
 api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}" if API_KEY else None
 
+# Route xử lý yêu cầu chat với Gemini API
 @app.route('/chat', methods=['POST'])
 def chat():
     if not API_KEY:
@@ -213,6 +216,7 @@ def chat():
         print(f"Chat error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# Route lấy dữ liệu AQI cho tất cả các địa điểm
 @app.route('/aqi', methods=['GET'])
 def get_aqi_data():
     result = []
@@ -233,32 +237,29 @@ def get_aqi_data():
                 print(f"Error processing future for {city_name}: {str(e)}")
     return jsonify(result)
 
+# Route hiển thị trang bản đồ chính
 @app.route('/index')
 def index():
     return render_template('index.html')
 
+# Route hiển thị trang đánh giá sức khỏe (trang chủ mặc định)
 @app.route('/')
 def health_evaluation():
     return render_template('health_evaluation.html')
 
-# --- Tải Pipeline ---
+# Tải pipeline mô hình dự đoán đã được huấn luyện
 pipeline = None
-pipeline_features = [] # Lưu trữ tên features mà pipeline mong đợi
+pipeline_features = []
 try:
-    # Tải pipeline duy nhất
     pipeline = joblib.load('health_risk_pipeline.pkl')
     print("Đã tải thành công health_risk_pipeline.pkl")
 
-    # Cố gắng lấy tên features từ bước preprocessor của pipeline (nếu có)
     try:
-        # Giả sử preprocessor là bước đầu tiên và là ColumnTransformer
         preprocessor_step = pipeline.named_steps.get('preprocessor')
         if preprocessor_step and hasattr(preprocessor_step, 'transformers_'):
-            # Lấy tên features từ transformer đầu tiên (thường là 'num')
             pipeline_features = preprocessor_step.transformers_[0][2]
             print(f"Pipeline mong đợi các features: {pipeline_features}")
         else:
-            # Nếu không lấy được, sử dụng danh sách mặc định (cần khớp với lúc huấn luyện)
             pipeline_features = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
             print(f"Không lấy được features từ pipeline, sử dụng mặc định: {pipeline_features}")
     except Exception as e:
@@ -271,11 +272,10 @@ except FileNotFoundError:
 except Exception as e:
     print(f"Lỗi khi tải pipeline: {e}")
     pipeline = None
-# --- Kết thúc tải Pipeline ---
 
+# Route API để dự đoán mức độ rủi ro sức khỏe
 @app.route('/api/predict', methods=['POST'])
 def predict():
-    # Sử dụng biến pipeline đã tải ở trên
     if pipeline is None:
         return jsonify({'error': 'Model pipeline is not loaded.'}), 500
     if not pipeline_features:
@@ -286,22 +286,16 @@ def predict():
         if not data:
             return jsonify({'error': 'No input data provided'}), 400
 
-        # --- Thu thập và chuyển đổi đơn vị ---
         input_values_raw = {}
         input_units = {}
-        # Các chất ô nhiễm cần kiểm tra đơn vị
         pollutants_with_units = ['no2', 'co', 'o3', 'so2']
-        # Các features khác không cần đơn vị đặc biệt
         other_features = ['pm25', 'pm10', 'humidity', 'temperature', 'wind']
 
-        # Lấy giá trị và đơn vị
         for feature in pollutants_with_units:
             val_str = data.get(feature)
             unit = data.get(f"{feature}_unit")
-            # Xác định đơn vị hợp lệ
             valid_units = (['ppb', 'ugm3'] if feature != 'co' else ['ppm', 'ugm3'])
             input_units[feature] = unit if unit in valid_units else None
-            # Chuyển giá trị sang float, lỗi thành None
             try:
                 input_values_raw[feature] = float(val_str) if val_str not in (None, '') else None
             except (ValueError, TypeError):
@@ -314,12 +308,9 @@ def predict():
             except (ValueError, TypeError):
                 input_values_raw[feature] = None
 
-        # Lấy đơn vị của gió riêng
         wind_unit = data.get('wind_unit')
         input_units['wind'] = wind_unit if wind_unit in ['ms', 'kmh'] else None
 
-        # --- Chuẩn bị dữ liệu cho tính toán AQI ---
-        # Hàm calculate_aqi cần: pm25, pm10 (ug/m3), no2, o3, so2 (ppb), co (ppm)
         aqi_input = {}
         aqi_input['pm25'] = input_values_raw.get('pm25')
         aqi_input['pm10'] = input_values_raw.get('pm10')
@@ -343,14 +334,12 @@ def predict():
             else:
                 aqi_input[f'{gas}_ppb'] = None
 
-        # --- Chuẩn bị dữ liệu cho Pipeline Model ---
         model_input_values = {}
         model_input_values['pm25'] = input_values_raw.get('pm25')
         model_input_values['pm10'] = input_values_raw.get('pm10')
         model_input_values['humidity'] = input_values_raw.get('humidity')
         model_input_values['temperature'] = input_values_raw.get('temperature')
 
-        # Chuyển CO về ppm cho model
         if co_raw is not None and co_unit == 'ugm3':
              model_input_values['co'] = ugm3_to_ppm(co_raw, MW.get('co'))
         elif co_raw is not None and co_unit == 'ppm':
@@ -358,7 +347,6 @@ def predict():
         else:
              model_input_values['co'] = None
 
-        # Chuyển NO2, O3, SO2 về ppb cho model
         for gas in ['no2', 'o3', 'so2']:
             raw_val = input_values_raw.get(gas)
             unit = input_units.get(gas)
@@ -369,7 +357,6 @@ def predict():
             else:
                 model_input_values[gas] = None
 
-        # Xử lý và chuyển đổi đơn vị gió cho model
         wind_raw = input_values_raw.get('wind')
         wind_unit_local = input_units.get('wind')
         if wind_raw is not None:
@@ -382,7 +369,6 @@ def predict():
         else:
             model_input_values['wind'] = None
 
-        # Tạo list giá trị theo đúng thứ tự pipeline_features
         input_for_pipeline_list = []
         for f in pipeline_features:
             val = model_input_values.get(f)
@@ -395,7 +381,6 @@ def predict():
         print(f"Values passed to calculate_aqi: pm25={aqi_input['pm25']}, pm10={aqi_input['pm10']}, no2_ppb={aqi_input['no2_ppb']}, co_ppm={aqi_input['co_ppm']}, o3_ppb={aqi_input['o3_ppb']}, so2_ppb={aqi_input['so2_ppb']}")
         print(f"Values for pipeline prediction (ordered by {pipeline_features}, NaN for missing): {input_for_pipeline_list}")
 
-        # --- Tính toán AQI ---
         pollutants_for_aqi_check = [aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'], aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']]
         if not any(p is not None and not math.isnan(p) and not math.isinf(p) for p in pollutants_for_aqi_check):
              calculated_aqi = None
@@ -407,7 +392,6 @@ def predict():
             )
         print(f"Calculated AQI result: {calculated_aqi}")
 
-        # --- Dự đoán bằng Pipeline ---
         input_df = pd.DataFrame([input_for_pipeline_list], columns=pipeline_features)
 
         try:
@@ -431,12 +415,10 @@ def predict():
 
         print("-" * 20)
 
-        # --- Lấy khuyến nghị ---
         model_recommendations = get_health_recommendations(predicted_risk_level)
         aqi_for_specific_groups = calculated_aqi if calculated_aqi is not None and not math.isnan(calculated_aqi) else 0
         specific_group_recommendations = get_specific_group_recommendations(aqi_for_specific_groups)
 
-        # --- Tạo response ---
         response_data = {
             'predicted_risk_level': predicted_risk_level,
             'risk_name': model_recommendations['risk_name'],
@@ -463,15 +445,9 @@ def predict():
         print(traceback.format_exc())
         return jsonify({'error': f'Lỗi dự đoán không xác định: {str(e)}'}), 500
 
+# Hàm tính toán chỉ số AQI tổng hợp từ các chỉ số thành phần
+# Dựa trên công thức tính AQI của EPA Hoa Kỳ
 def calculate_aqi(pm25, pm10, no2_ppb, co_ppm, o3_ppb, so2_ppb):
-    """
-    Tính AQI dựa trên các chất ô nhiễm, lấy giá trị cao nhất.
-    Hàm này LUÔN mong đợi đầu vào:
-    - pm25, pm10: µg/m³
-    - no2_ppb, o3_ppb, so2_ppb: ppb
-    - co_ppm: ppm
-    Trả về None nếu không có đủ dữ liệu hợp lệ để tính.
-    """
     aqi_values = []
     print(f"  [calculate_aqi] Inputs: pm25={pm25}, pm10={pm10}, no2_ppb={no2_ppb}, co_ppm={co_ppm}, o3_ppb={o3_ppb}, so2_ppb={so2_ppb}")
 
@@ -573,7 +549,7 @@ def calculate_aqi(pm25, pm10, no2_ppb, co_ppm, o3_ppb, so2_ppb):
     print(f"  [calculate_aqi] Final Max AQI: {final_aqi}")
     return final_aqi
 
-@app.route('/')
+# Route hiển thị trang dự đoán
 @app.route('/DuDoan')
 def DuDoan():
     return render_template('DuDoan.html')
