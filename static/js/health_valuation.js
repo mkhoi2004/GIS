@@ -90,10 +90,26 @@ function sendMessage() {
         return;
     }
 
-    // Hiển thị tin nhắn của người dùng trong chatbox
     let chatboxBody = document.getElementById("chatboxBody");
-    chatboxBody.innerHTML += `<div class="user-message">${userMessage}</div>`;
+    // Thêm tin nhắn người dùng
+    const userMsgDiv = document.createElement('div');
+    userMsgDiv.classList.add('user-message');
+    userMsgDiv.textContent = userMessage;
+    chatboxBody.appendChild(userMsgDiv);
 
+    // Xóa ô nhập liệu ngay lập tức
+    document.getElementById("userMessage").value = "";
+    // Cuộn xuống dưới
+    chatboxBody.scrollTop = chatboxBody.scrollHeight;
+
+    // Hiển thị tạm thời "Đang trả lời..." (Tùy chọn)
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.classList.add('ai-response');
+    thinkingDiv.innerHTML = '<i>Đang trả lời...</i>';
+    chatboxBody.appendChild(thinkingDiv);
+    chatboxBody.scrollTop = chatboxBody.scrollHeight;
+
+    
     // Gửi yêu cầu tới backend (Flask)
     fetch('/chat', {
         method: 'POST',
@@ -102,25 +118,54 @@ function sendMessage() {
         },
         body: JSON.stringify({ message: userMessage })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+             // Nếu lỗi, thử đọc JSON lỗi từ server
+             return response.json().then(err => {
+                 throw new Error(err.error || `Lỗi ${response.status}`);
+             }).catch(() => {
+                 // Nếu không đọc được JSON lỗi, ném lỗi HTTP chung
+                 throw new Error(`Lỗi ${response.status}: ${response.statusText}`);
+             });
+        }
+        return response.json();
+    })
     .then(data => {
-        // Log phản hồi từ backend
-        console.log("Response from backend:", data);
+        // Xóa "Đang trả lời..."
+        chatboxBody.removeChild(thinkingDiv);
 
         if (data.response) {
-            // Hiển thị phản hồi từ AI (Gemini)
-            let aiResponse = data.response;
-            chatboxBody.innerHTML += `<div class="ai-response">${aiResponse}</div>`;
-            document.getElementById("userMessage").value = ""; // Xóa ô nhập liệu
-
-            // Cuộn xuống dưới để hiển thị tin nhắn mới nhất
-            chatboxBody.scrollTop = chatboxBody.scrollHeight;
+            // Hiển thị phản hồi từ AI
+            const aiMsgDiv = document.createElement('div');
+            aiMsgDiv.classList.add('ai-response');
+            // Xử lý xuống dòng nếu AI trả về \n
+            aiMsgDiv.innerHTML = data.response.replace(/\n/g, '<br>'); 
+            chatboxBody.appendChild(aiMsgDiv);
         } else {
-            console.log("Không có phản hồi từ API Gemini");
+            // Hiển thị lỗi nếu không có response
+            const errorDiv = document.createElement('div');
+            errorDiv.classList.add('ai-response');
+            errorDiv.style.color = 'red';
+            errorDiv.textContent = data.error || 'Không nhận được phản hồi hợp lệ.';
+            chatboxBody.appendChild(errorDiv);
         }
+        // Cuộn xuống dưới để hiển thị tin nhắn mới nhất
+        chatboxBody.scrollTop = chatboxBody.scrollHeight;
     })
     .catch(error => {
-        console.error("Error:", error);  // Log lỗi nếu có sự cố
+        console.error("Error:", error);
+         // Xóa "Đang trả lời..." nếu còn
+         if (chatboxBody.contains(thinkingDiv)) {
+             chatboxBody.removeChild(thinkingDiv);
+         }
+        // Hiển thị lỗi fetch
+        const errorDiv = document.createElement('div');
+        errorDiv.classList.add('ai-response');
+        errorDiv.style.color = 'red';
+        errorDiv.textContent = `Lỗi: ${error.message}`;
+        chatboxBody.appendChild(errorDiv);
+        // Cuộn xuống dưới
+        chatboxBody.scrollTop = chatboxBody.scrollHeight;
     });
 }
 
@@ -237,6 +282,41 @@ function updateChart(probabilities) {
         });
     }
 }
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    const chatWidget = document.querySelector('.chat-widget');
+    const chatToggleButton = document.getElementById('chatToggleButton');
+    const chatCloseButton = document.getElementById('chatCloseButton');
+    const chatboxContainer = document.getElementById('chatboxContainer'); // Tham chiếu đến div .chatbox
+
+    if (chatToggleButton && chatWidget && chatCloseButton && chatboxContainer) {
+        // Mở chat khi click nút tròn
+        chatToggleButton.addEventListener('click', function() {
+            chatWidget.classList.add('open');
+        });
+
+        // Đóng chat khi click nút X
+        chatCloseButton.addEventListener('click', function() {
+            chatWidget.classList.remove('open');
+        });
+
+        // Tùy chọn: Đóng chat khi click bên ngoài chatbox
+        // document.addEventListener('click', function(event) {
+        //     // Kiểm tra xem click có nằm ngoài .chat-widget không
+        //     if (!chatWidget.contains(event.target) && chatWidget.classList.contains('open')) {
+        //         chatWidget.classList.remove('open');
+        //     }
+        // });
+
+    } else {
+        console.error("Không tìm thấy các phần tử cần thiết cho chat widget.");
+    }
+
+    // --- Logic load thành phố vào select (giữ nguyên) ---
+    fetchCityData(); 
+});
+
 
 // Hàm này được gọi khi người dùng nhấn nút "Đánh giá rủi ro"
 // Bạn cần đảm bảo nút này có sự kiện onclick="submitPredictionForm()" hoặc thêm event listener

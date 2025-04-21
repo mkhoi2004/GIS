@@ -209,28 +209,27 @@ body, html {
 
 .more-info {
     text-align: center;
-    display: flex;           /* Sử dụng flexbox */
-    justify-content: space-between; /* Căn đều các phần tử với khoảng cách tối đa */
-    gap: 8px;               /* Khoảng cách giữa các liên kết */
-    flex-wrap: wrap;        /* Cho phép xuống dòng nếu không đủ chỗ */
+    display: flex;           
+    justify-content: space-between; 
+    gap: 8px;               
+    flex-wrap: wrap;        
 }
 
 .more-info a {
     display: inline-block;
-    padding: 6px 12px;      /* Tăng padding nhẹ cho cân đối */
-    background: #007bff;
+    padding: 6px 12px;     
     color: #fff;
     text-decoration: none;
     border-radius: 5px;
     font-size: 12px;
-    transition: all 0.3s ease; /* Thêm transition cho cả background và transform */
-    flex: 1;                /* Cho phép các nút mở rộng đều nhau */
-    min-width: 80px;        /* Đảm bảo kích thước tối thiểu */
-    text-align: center;     /* Căn giữa chữ trong nút */
+    transition: all 0.3s ease; 
+    flex: 1;                
+    min-width: 80px;        
+    text-align: center;   
 }
 
 .more-info a:hover {
     background: #0056b3;
-    transform: translateY(-2px); /* Hiệu ứng nâng nhẹ khi hover */
+    transform: translateY(-2px); 
     box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
 }
