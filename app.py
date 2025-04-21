@@ -9,16 +9,55 @@ import pandas as pd
 import joblib
 import os
 from health_recommendations import get_health_recommendations, get_specific_group_recommendations
+import math
+import numpy as np
 
 load_dotenv()
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')  # Lấy từ .env hoặc mặc định
-# Loại bỏ CSRFProtect vì endpoint /api/predict nhận JSON, không cần CSRF
+app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')
 
 # Kết nối MongoDB
 client = MongoClient(os.getenv('MONGO_URI', 'mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/'))
 db = client['GIS']
 collection = db['DataAQI']
+
+# --- HÀM CHUYỂN ĐỔI ĐƠN VỊ ---
+# Khối lượng phân tử (g/mol)
+MW = {
+    'co': 28.01,
+    'no2': 46.01,
+    'o3': 48.00,
+    'so2': 64.07
+}
+
+# Thể tích mol chuẩn (L/mol) ở 25°C, 1 atm
+MOLAR_VOLUME = 24.45
+
+def ugm3_to_ppm(value_ugm3, mw):
+    """Chuyển đổi µg/m³ sang ppm."""
+    if value_ugm3 is None or mw is None or mw == 0:
+        return None
+    try:
+        value_ppm = (float(value_ugm3) * MOLAR_VOLUME) / (mw * 1000)
+        if math.isnan(value_ppm) or math.isinf(value_ppm):
+            return None
+        return value_ppm
+    except (ValueError, TypeError):
+        return None
+
+def ugm3_to_ppb(value_ugm3, mw):
+    """Chuyển đổi µg/m³ sang ppb."""
+    value_ppm = ugm3_to_ppm(value_ugm3, mw)
+    if value_ppm is None:
+        return None
+    try:
+        value_ppb = value_ppm * 1000
+        if math.isnan(value_ppb) or math.isinf(value_ppb):
+            return None
+        return value_ppb
+    except (ValueError, TypeError):
+        return None
+# --- KẾT THÚC HÀM CHUYỂN ĐỔI ---
 
 locations = {
     "Vietnam": [
@@ -110,8 +149,8 @@ def fetch_city_data(city, country):
             'update_time': update_time,
             'lat': city['lat'],
             'lon': city['lon'],
-            'population': city['population'],
-            'area': city['area'],
+            'population': city.get('population'),
+            'area': city.get('area'),
             'saved_at': datetime.now().strftime('%H:%M %d/%m/%Y')
         }
 
@@ -138,11 +177,10 @@ def fetch_city_data(city, country):
             'update_time': None,
             'lat': city['lat'],
             'lon': city['lon'],
-            'population': city['population'],
-            'area': city['area'],
+            'population': city.get('population'),
+            'area': city.get('area'),
             'saved_at': datetime.now().strftime('%H:%M %d/%m/%Y')
         }
-        collection.insert_one(city_data.copy())
         return city_data
 
 API_KEY = os.getenv('API_KEY')
@@ -163,7 +201,12 @@ def chat():
 
         if response.status_code == 200:
             chat_response = response.json()
-            return jsonify({"response": chat_response['candidates'][0]['content']['parts'][0]['text']})
+            if 'candidates' in chat_response and len(chat_response['candidates']) > 0 and \
+               'content' in chat_response['candidates'][0] and \
+               'parts' in chat_response['candidates'][0]['content'] and len(chat_response['candidates'][0]['content']['parts']) > 0:
+                return jsonify({"response": chat_response['candidates'][0]['content']['parts'][0]['text']})
+            else:
+                return jsonify({'error': 'Unexpected API response structure'}), 500
         else:
             return jsonify({'error': f"API error: {response.status_code} - {response.text}"}), 500
     except Exception as e:
@@ -174,14 +217,20 @@ def chat():
 def get_aqi_data():
     result = []
     with ThreadPoolExecutor(max_workers=10) as executor:
+        futures_map = {}
         for country, cities in locations.items():
-            futures = [executor.submit(fetch_city_data, city, country) for city in cities]
-            for city, future in zip(cities, futures):
-                try:
-                    aqi_data = future.result()
-                    result.append(aqi_data)
-                except Exception as e:
-                    print(f"Error processing {city['name']}: {str(e)}")
+            for city in cities:
+                future = executor.submit(fetch_city_data, city, country)
+                futures_map[future] = city['name']
+
+        for future in futures_map:
+            city_name = futures_map[future]
+            try:
+                aqi_data = future.result()
+                if aqi_data and aqi_data.get('aqi') is not None:
+                     result.append(aqi_data)
+            except Exception as e:
+                print(f"Error processing future for {city_name}: {str(e)}")
     return jsonify(result)
 
 @app.route('/index')
@@ -200,6 +249,10 @@ except FileNotFoundError as e:
     print(f"Model loading error: {str(e)}")
     model = None
     preprocessor = None
+except Exception as e:
+    print(f"General error loading model/preprocessor: {str(e)}")
+    model = None
+    preprocessor = None
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -211,34 +264,124 @@ def predict():
         if not data:
             return jsonify({'error': 'No input data provided'}), 400
 
-        # Lấy dữ liệu từ request
-        features = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
-        input_values = [
-            float(data.get(feature)) if data.get(feature) not in (None, '') else None
-            for feature in features
-        ]
+        input_values_raw = {}
+        input_units = {}
+        pollutants_with_units = ['no2', 'co', 'o3', 'so2']
+        other_features = ['pm25', 'pm10', 'humidity', 'temperature', 'wind']
 
-        # Kiểm tra xem có ít nhất một giá trị hợp lệ
-        if all(val is None for val in input_values):
-            return jsonify({'error': 'At least one input value must be provided'}), 400
+        for feature in pollutants_with_units:
+            val_str = data.get(feature)
+            unit = data.get(f"{feature}_unit")
+            input_units[feature] = unit if unit in (['ppb', 'ugm3'] if feature != 'co' else ['ppm', 'ugm3']) else None
 
-        # Tạo DataFrame
-        input_data = pd.DataFrame([input_values], columns=features)
+            if val_str not in (None, ''):
+                try:
+                    input_values_raw[feature] = float(val_str)
+                except (ValueError, TypeError):
+                    input_values_raw[feature] = None
+            else:
+                input_values_raw[feature] = None
 
-        # Tiền xử lý và dự đoán
-        input_processed = preprocessor.transform(input_data)
-        risk_level = int(model.predict(input_processed)[0])
-        risk_probs = model.predict_proba(input_processed)[0].tolist()
+        for feature in other_features:
+            val_str = data.get(feature)
+            if val_str not in (None, ''):
+                try:
+                    input_values_raw[feature] = float(val_str)
+                except (ValueError, TypeError):
+                    input_values_raw[feature] = None
+            else:
+                input_values_raw[feature] = None
 
-        # Tính AQI
-        calculated_aqi = calculate_aqi(
-            input_values[0], input_values[1], input_values[2],
-            input_values[3], input_values[4], input_values[5]
-        )
+        aqi_input = {}
+        aqi_input['pm25'] = input_values_raw.get('pm25')
+        aqi_input['pm10'] = input_values_raw.get('pm10')
 
-        # Lấy khuyến nghị
+        co_raw = input_values_raw.get('co')
+        co_unit = input_units.get('co')
+        if co_raw is not None and co_unit == 'ugm3':
+            aqi_input['co_ppm'] = ugm3_to_ppm(co_raw, MW['co'])
+        elif co_raw is not None and co_unit == 'ppm':
+            aqi_input['co_ppm'] = co_raw
+        else:
+            aqi_input['co_ppm'] = None
+
+        for gas in ['no2', 'o3', 'so2']:
+            raw_val = input_values_raw.get(gas)
+            unit = input_units.get(gas)
+            if raw_val is not None and unit == 'ugm3':
+                aqi_input[f'{gas}_ppb'] = ugm3_to_ppb(raw_val, MW[gas])
+            elif raw_val is not None and unit == 'ppb':
+                aqi_input[f'{gas}_ppb'] = raw_val
+            else:
+                aqi_input[f'{gas}_ppb'] = None
+
+        model_input_values = {}
+        model_input_values['pm25'] = input_values_raw.get('pm25')
+        model_input_values['pm10'] = input_values_raw.get('pm10')
+        model_input_values['humidity'] = input_values_raw.get('humidity')
+        model_input_values['temperature'] = input_values_raw.get('temperature')
+        model_input_values['wind'] = input_values_raw.get('wind')
+
+        if co_raw is not None and co_unit == 'ugm3':
+             model_input_values['co'] = ugm3_to_ppm(co_raw, MW['co'])
+        elif co_raw is not None and co_unit == 'ppm':
+             model_input_values['co'] = co_raw
+        else:
+             model_input_values['co'] = None
+
+        for gas in ['no2', 'o3', 'so2']:
+            raw_val = input_values_raw.get(gas)
+            unit = input_units.get(gas)
+            if raw_val is not None and unit == 'ugm3':
+                model_input_values[gas] = ugm3_to_ppb(raw_val, MW[gas])
+            elif raw_val is not None and unit == 'ppb':
+                model_input_values[gas] = raw_val
+            else:
+                model_input_values[gas] = None
+
+        model_features_order = ['pm25', 'pm10', 'no2', 'co', 'o3', 'so2', 'humidity', 'temperature', 'wind']
+        input_for_model_list = []
+        for f in model_features_order:
+            val = model_input_values.get(f)
+            input_for_model_list.append(val if val is not None else np.nan)
+
+        print("-" * 20)
+        print(f"Received JSON data: {data}")
+        print(f"Raw input values: {input_values_raw}")
+        print(f"Input units: {input_units}")
+        print(f"Values passed to calculate_aqi: pm25={aqi_input['pm25']}, pm10={aqi_input['pm10']}, no2_ppb={aqi_input['no2_ppb']}, co_ppm={aqi_input['co_ppm']}, o3_ppb={aqi_input['o3_ppb']}, so2_ppb={aqi_input['so2_ppb']}")
+        print(f"Values for model prediction (ordered, NaN for missing): {input_for_model_list}")
+
+        pollutants_for_aqi_check = [aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'], aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']]
+        if not any(p is not None and not math.isnan(p) and not math.isinf(p) for p in pollutants_for_aqi_check):
+             calculated_aqi = None
+             print("    [predict] Not enough valid pollutant data to calculate AQI.")
+        else:
+            calculated_aqi = calculate_aqi(
+                aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'],
+                aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']
+            )
+
+        input_data = pd.DataFrame([input_for_model_list], columns=model_features_order)
+
+        try:
+            input_processed = preprocessor.transform(input_data)
+            if np.isnan(input_processed).any():
+                 print("Warning: NaN values present after preprocessing. Model prediction might be affected.")
+            risk_level = int(model.predict(input_processed)[0])
+            risk_probs = model.predict_proba(input_processed)[0].tolist()
+        except Exception as model_err:
+             print(f"Model prediction/preprocessing error: {str(model_err)}")
+             import traceback
+             print(traceback.format_exc())
+             return jsonify({'error': f'Lỗi trong quá trình dự đoán của mô hình (có thể do giá trị thiếu): {str(model_err)}'}), 500
+
+        print(f"Calculated AQI result: {calculated_aqi}")
+        print("-" * 20)
+
         recommendations = get_health_recommendations(risk_level)
-        specific_recommendations = get_specific_group_recommendations(calculated_aqi if calculated_aqi is not None else 0)
+        aqi_for_specific = calculated_aqi if calculated_aqi is not None else 0
+        specific_recommendations = get_specific_group_recommendations(aqi_for_specific)
 
         response = {
             'risk_level': risk_level,
@@ -256,113 +399,126 @@ def predict():
         return jsonify(response)
 
     except ValueError as e:
-        print(f"Prediction error: {str(e)}")
-        return jsonify({'error': f'Invalid input data: {str(e)}'}), 400
+        print(f"Prediction error (ValueError): {str(e)}")
+        return jsonify({'error': f'Dữ liệu đầu vào không hợp lệ: {str(e)}'}), 400
+    except KeyError as e:
+         print(f"Prediction error (KeyError): Missing key {str(e)}")
+         return jsonify({'error': f'Thiếu dữ liệu đầu vào cần thiết: {str(e)}'}), 400
     except Exception as e:
-        print(f"Prediction error: {str(e)}")
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+        import traceback
+        print(f"Prediction error (Exception): {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Lỗi dự đoán không xác định: {str(e)}'}), 500
 
-def calculate_aqi(pm25, pm10, no2, co, o3, so2):
-    """Tính AQI dựa trên các chất ô nhiễm, lấy giá trị cao nhất."""
+def calculate_aqi(pm25, pm10, no2_ppb, co_ppm, o3_ppb, so2_ppb):
+    """
+    Tính AQI dựa trên các chất ô nhiễm, lấy giá trị cao nhất.
+    Hàm này LUÔN mong đợi đầu vào:
+    - pm25, pm10: µg/m³
+    - no2_ppb, o3_ppb, so2_ppb: ppb
+    - co_ppm: ppm
+    Trả về None nếu không có đủ dữ liệu hợp lệ để tính.
+    """
     aqi_values = []
+    print(f"  [calculate_aqi] Inputs: pm25={pm25}, pm10={pm10}, no2_ppb={no2_ppb}, co_ppm={co_ppm}, o3_ppb={o3_ppb}, so2_ppb={so2_ppb}")
 
-    # PM2.5
-    if pm25 is not None:
-        if pm25 <= 12:
-            aqi = (50 / 12) * pm25
-        elif pm25 <= 35.4:
-            aqi = 50 + (50 / (35.4 - 12)) * (pm25 - 12)
-        elif pm25 <= 55.4:
-            aqi = 100 + (50 / (55.4 - 35.4)) * (pm25 - 35.4)
-        elif pm25 <= 150.4:
-            aqi = 150 + (50 / (150.4 - 55.4)) * (pm25 - 55.4)
-        elif pm25 <= 250.4:
-            aqi = 200 + (100 / (250.4 - 150.4)) * (pm25 - 150.4)
-        else:
-            aqi = 300 + (200 / (500.4 - 250.4)) * min(pm25 - 250.4, 250)
-        aqi_values.append(aqi)
+    def is_valid(value):
+        return value is not None and not math.isnan(value) and not math.isinf(value)
 
-    # PM10 - FIX: Sửa lại công thức tính
-    if pm10 is not None:
-        if pm10 <= 54:
-            aqi = (50 / 54) * pm10
-        elif pm10 <= 154:
-            aqi = 50 + (50 / (154 - 54)) * (pm10 - 54)
-        elif pm10 <= 254:
-            aqi = 100 + (50 / (254 - 154)) * (pm10 - 154)
-        elif pm10 <= 354:
-            aqi = 150 + (50 / (354 - 254)) * (pm10 - 254)  # FIX: Sửa từ (pm10 - 154)
-        elif pm10 <= 424:
-            aqi = 200 + (100 / (424 - 354)) * (pm10 - 354)
-        else:
-            aqi = 300 + (200 / (604 - 424)) * min(pm10 - 424, 180)
-        aqi_values.append(aqi)
+    if is_valid(pm25):
+        try:
+            pm25_f = float(pm25)
+            if pm25_f <= 12: aqi = (50 / 12) * pm25_f
+            elif pm25_f <= 35.4: aqi = 50 + (50 / (35.4 - 12)) * (pm25_f - 12)
+            elif pm25_f <= 55.4: aqi = 100 + (50 / (55.4 - 35.4)) * (pm25_f - 35.4)
+            elif pm25_f <= 150.4: aqi = 150 + (50 / (150.4 - 55.4)) * (pm25_f - 55.4)
+            elif pm25_f <= 250.4: aqi = 200 + (100 / (250.4 - 150.4)) * (pm25_f - 150.4)
+            else: aqi = 300 + (200 / (500.4 - 250.4)) * min(pm25_f - 250.4, 250)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] PM2.5 AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid PM2.5 value: {pm25}")
 
-    # NO2
-    if no2 is not None:
-        if no2 <= 53:
-            aqi = (50 / 53) * no2
-        elif no2 <= 100:
-            aqi = 50 + (50 / (100 - 53)) * (no2 - 53)
-        elif no2 <= 360:
-            aqi = 100 + (50 / (360 - 100)) * (no2 - 100)
-        elif no2 <= 649:
-            aqi = 150 + (50 / (649 - 360)) * (no2 - 360)
-        elif no2 <= 1249:
-            aqi = 200 + (100 / (1249 - 649)) * (no2 - 649)
-        else:
-            aqi = 300 + (200 / (2049 - 1249)) * min(no2 - 1249, 800)
-        aqi_values.append(aqi)
+    if is_valid(pm10):
+        try:
+            pm10_f = float(pm10)
+            if pm10_f <= 54: aqi = (50 / 54) * pm10_f
+            elif pm10_f <= 154: aqi = 50 + (50 / (154 - 54)) * (pm10_f - 54)
+            elif pm10_f <= 254: aqi = 100 + (50 / (254 - 154)) * (pm10_f - 154)
+            elif pm10_f <= 354: aqi = 150 + (50 / (354 - 254)) * (pm10_f - 254)
+            elif pm10_f <= 424: aqi = 200 + (100 / (424 - 354)) * (pm10_f - 354)
+            else: aqi = 300 + (200 / (604 - 424)) * min(pm10_f - 424, 180)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] PM10 AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid PM10 value: {pm10}")
 
-    # CO
-    if co is not None:
-        if co <= 4.4:
-            aqi = (50 / 4.4) * co
-        elif co <= 9.4:
-            aqi = 50 + (50 / (9.4 - 4.4)) * (co - 4.4)
-        elif co <= 12.4:
-            aqi = 100 + (50 / (12.4 - 9.4)) * (co - 9.4)
-        elif co <= 15.4:
-            aqi = 150 + (50 / (15.4 - 12.4)) * (co - 12.4)
-        elif co <= 30.4:
-            aqi = 200 + (100 / (30.4 - 15.4)) * (co - 15.4)
-        else:
-            aqi = 300 + (200 / (50.4 - 30.4)) * min(co - 30.4, 20)
-        aqi_values.append(aqi)
+    if is_valid(no2_ppb):
+        try:
+            no2 = float(no2_ppb)
+            if no2 <= 53: aqi = (50 / 53) * no2
+            elif no2 <= 100: aqi = 50 + (50 / (100 - 53)) * (no2 - 53)
+            elif no2 <= 360: aqi = 100 + (50 / (360 - 100)) * (no2 - 100)
+            elif no2 <= 649: aqi = 150 + (50 / (649 - 360)) * (no2 - 360)
+            elif no2 <= 1249: aqi = 200 + (100 / (1249 - 649)) * (no2 - 649)
+            else: aqi = 300 + (200 / (2049 - 1249)) * min(no2 - 1249, 800)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] NO2 AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid NO2 value: {no2_ppb}")
 
-    # O3
-    if o3 is not None:
-        if o3 <= 54:
-            aqi = (50 / 54) * o3
-        elif o3 <= 70:
-            aqi = 50 + (50 / (70 - 54)) * (o3 - 54)
-        elif o3 <= 85:
-            aqi = 100 + (50 / (85 - 70)) * (o3 - 70)
-        elif o3 <= 105:
-            aqi = 150 + (50 / (105 - 85)) * (o3 - 85)
-        elif o3 <= 200:
-            aqi = 200 + (100 / (200 - 105)) * (o3 - 105)
-        else:
-            aqi = 300 + (200 / (300 - 200)) * min(o3 - 200, 100)
-        aqi_values.append(aqi)
+    if is_valid(co_ppm):
+        try:
+            co = float(co_ppm)
+            if co <= 4.4: aqi = (50 / 4.4) * co
+            elif co <= 9.4: aqi = 50 + (50 / (9.4 - 4.4)) * (co - 4.4)
+            elif co <= 12.4: aqi = 100 + (50 / (12.4 - 9.4)) * (co - 9.4)
+            elif co <= 15.4: aqi = 150 + (50 / (15.4 - 12.4)) * (co - 12.4)
+            elif co <= 30.4: aqi = 200 + (100 / (30.4 - 15.4)) * (co - 15.4)
+            else: aqi = 300 + (200 / (50.4 - 30.4)) * min(co - 30.4, 20)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] CO AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid CO value: {co_ppm}")
 
-    # SO2
-    if so2 is not None:
-        if so2 <= 35:
-            aqi = (50 / 35) * so2
-        elif so2 <= 75:
-            aqi = 50 + (50 / (75 - 35)) * (so2 - 35)
-        elif so2 <= 185:
-            aqi = 100 + (50 / (185 - 75)) * (so2 - 75)
-        elif so2 <= 304:
-            aqi = 150 + (50 / (304 - 185)) * (so2 - 185)
-        elif so2 <= 604:
-            aqi = 200 + (100 / (604 - 304)) * (so2 - 304)
-        else:
-            aqi = 300 + (200 / (1004 - 604)) * min(so2 - 604, 400)
-        aqi_values.append(aqi)
+    if is_valid(o3_ppb):
+        try:
+            o3 = float(o3_ppb)
+            if o3 <= 54: aqi = (50 / 54) * o3
+            elif o3 <= 70: aqi = 50 + (50 / (70 - 54)) * (o3 - 54)
+            elif o3 <= 85: aqi = 100 + (50 / (85 - 70)) * (o3 - 70)
+            elif o3 <= 105: aqi = 150 + (50 / (105 - 85)) * (o3 - 85)
+            elif o3 <= 200: aqi = 200 + (100 / (200 - 105)) * (o3 - 105)
+            else: aqi = 300 + (200 / (300 - 200)) * min(o3 - 200, 100)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] O3 AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid O3 value: {o3_ppb}")
 
-    return max(aqi_values) if aqi_values else None
+    if is_valid(so2_ppb):
+        try:
+            so2 = float(so2_ppb)
+            if so2 <= 35: aqi = (50 / 35) * so2
+            elif so2 <= 75: aqi = 50 + (50 / (75 - 35)) * (so2 - 35)
+            elif so2 <= 185: aqi = 100 + (50 / (185 - 75)) * (so2 - 75)
+            elif so2 <= 304: aqi = 150 + (50 / (304 - 185)) * (so2 - 185)
+            elif so2 <= 604: aqi = 200 + (100 / (604 - 304)) * (so2 - 304)
+            else: aqi = 300 + (200 / (1004 - 604)) * min(so2 - 604, 400)
+            aqi_values.append(aqi)
+            print(f"    [calculate_aqi] SO2 AQI = {aqi}")
+        except (ValueError, TypeError):
+            print(f"    [calculate_aqi] Invalid SO2 value: {so2_ppb}")
+
+    print(f"  [calculate_aqi] All individual valid AQIs calculated: {aqi_values}")
+    valid_aqi_values = [aqi for aqi in aqi_values if is_valid(aqi)]
+
+    if not valid_aqi_values:
+        print("  [calculate_aqi] No valid individual AQIs to calculate final AQI.")
+        return None
+
+    final_aqi = max(valid_aqi_values)
+    print(f"  [calculate_aqi] Final Max AQI: {final_aqi}")
+    return final_aqi
 
 @app.route('/')
 @app.route('/DuDoan')
@@ -371,6 +527,6 @@ def DuDoan():
 
 if __name__ == '__main__':
     try:
-        app.run(debug=True)
+        app.run(host='0.0.0.0', port=5000, debug=True)
     except Exception as e:
         print(f"Error during application startup: {str(e)}")

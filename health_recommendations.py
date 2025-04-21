@@ -110,23 +110,43 @@ def get_health_recommendations(risk_level):
     }
     
     return recommendations.get(risk_level, {"risk_name": "Không xác định", "description": "Không có dữ liệu", "recommendations": []})
+
 # Hàm lấy khuyến nghị cụ thể cho từng nhóm đối tượng dựa trên mức AQI
 def get_specific_group_recommendations(aqi_value):
-    if pd.isna(aqi_value) or aqi_value == '-':
-        return "Không có dữ liệu AQI"
-    
-    aqi = float(aqi_value)
+    # Kiểm tra đầu vào, trả về thông báo nếu không hợp lệ
+    if pd.isna(aqi_value) or isinstance(aqi_value, str) and not aqi_value.replace('.', '', 1).isdigit():
+        # Trả về dict rỗng hoặc thông báo lỗi cho từng nhóm nếu AQI không hợp lệ
+        default_message = "Không có dữ liệu AQI hợp lệ để đưa ra khuyến nghị."
+        return {
+            "Người khỏe mạnh": default_message,
+            "Người già (>65 tuổi)": default_message,
+            "Trẻ em (<18 tuổi)": default_message,
+            "Người mắc bệnh hô hấp": default_message
+        }
+
+    try:
+        aqi = float(aqi_value)
+    except (ValueError, TypeError):
+        # Xử lý trường hợp không thể chuyển đổi sang float
+        default_message = "Giá trị AQI không hợp lệ."
+        return {
+            "Người khỏe mạnh": default_message,
+            "Người già (>65 tuổi)": default_message,
+            "Trẻ em (<18 tuổi)": default_message,
+            "Người mắc bệnh hô hấp": default_message
+        }
+
+
     recommendations = {
         "Người khỏe mạnh": {
-            "threshold": 100,
             "advice": {
-                "0-100": "An toàn cho mọi hoạt động ngoài trời.",
+                "0-50": "An toàn cho mọi hoạt động ngoài trời.",
+                "51-100": "An toàn cho mọi hoạt động ngoài trời.",
                 "101-150": "Hạn chế hoạt động ngoài trời kéo dài, đặc biệt nếu có triệu chứng như ho, khó thở.",
                 "151+": "Tránh vận động mạnh ngoài trời, theo dõi triệu chứng."
             }
         },
         "Người già (>65 tuổi)": {
-            "threshold": 50,
             "advice": {
                 "0-50": "An toàn cho các hoạt động ngoài trời.",
                 "51-100": "Theo dõi sức khỏe, hạn chế tiếp xúc kéo dài nếu có bệnh nền (tim mạch, hô hấp).",
@@ -134,7 +154,6 @@ def get_specific_group_recommendations(aqi_value):
             }
         },
         "Trẻ em (<18 tuổi)": {
-            "threshold": 50,
             "advice": {
                 "0-50": "An toàn cho mọi hoạt động ngoài trời.",
                 "51-100": "Giảm thời gian chơi ngoài trời nếu nhạy cảm với khói bụi.",
@@ -142,7 +161,6 @@ def get_specific_group_recommendations(aqi_value):
             }
         },
         "Người mắc bệnh hô hấp": {
-            "threshold": 50,
             "advice": {
                 "0-50": "Theo dõi triệu chứng, mang theo thuốc (ống hít).",
                 "51-100": "Theo dõi triệu chứng, mang theo thuốc (ống hít).",
@@ -150,16 +168,29 @@ def get_specific_group_recommendations(aqi_value):
             }
         }
     }
-    
+
     result = {}
+    default_advice = "Không có khuyến nghị cụ thể cho mức AQI này."
+
     for group, info in recommendations.items():
-        if aqi <= 50:
-            result[group] = info["advice"]["0-50"]
-        elif aqi <= 100:
-            result[group] = info["advice"]["51-100"]
-        elif aqi <= 150 and group == "Người khỏe mạnh":
-            result[group] = info["advice"]["101-150"]
-        else:
-            result[group] = info["advice"]["151+"] if group == "Người khỏe mạnh" else info["advice"]["101+"]
-    
+        advice_dict = info.get("advice", {})
+        selected_advice = default_advice
+
+        try:
+            if aqi <= 50:
+                selected_advice = advice_dict.get("0-50", default_advice)
+            elif aqi <= 100:
+                selected_advice = advice_dict.get("51-100", default_advice)
+            elif aqi <= 150 and group == "Người khỏe mạnh":
+                selected_advice = advice_dict.get("101-150", default_advice)
+            else:
+                key_to_use = "151+" if group == "Người khỏe mạnh" else "101+"
+                selected_advice = advice_dict.get(key_to_use, default_advice)
+
+            result[group] = selected_advice
+
+        except Exception as e:
+            print(f"Unexpected error processing group '{group}': {str(e)}")
+            result[group] = "Đã xảy ra lỗi khi lấy khuyến nghị."
+
     return result
