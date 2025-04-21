@@ -214,9 +214,18 @@
                     <input type="number" id="temperature" name="temperature" min="-50" max="60" step="0.1" placeholder="Nhập nhiệt độ">
                 </div>
 
-                <div class="form-group">
-                    <label for="wind">Tốc độ gió (m/s):</label>
-                    <input type="number" id="wind" name="wind" min="0" step="0.1" placeholder="Nhập tốc độ gió">
+                <div class="form-group form-group-inline">
+                    <div class="input-wrapper">
+                        <label for="wind">Tốc độ gió:</label>
+                        <input type="number" id="wind" name="wind" min="0" step="0.1" placeholder="Nhập tốc độ gió">
+                    </div>
+                    <div class="unit-wrapper">
+                        <label for="wind-unit">Đơn vị:</label>
+                        <select id="wind-unit" name="wind_unit">
+                            <option value="ms" selected>m/s</option>
+                            <option value="kmh">km/h</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button type="submit">Đánh giá rủi ro</button>
@@ -302,6 +311,26 @@
     </div>
 
     <script>
+        
+        function getAqiLevelInfo(aqi) {
+            if (aqi === null || aqi === undefined || isNaN(aqi)) {
+                return { name: 'N/A', color: '#cccccc', textColor: '#000000' }; // Màu xám cho N/A
+            }
+            if (aqi <= 50) {
+                return { name: 'Tốt', color: '#a8e05f', textColor: '#33691e' }; // Xanh lá
+            } else if (aqi <= 100) {
+                return { name: 'Trung bình', color: '#fdd835', textColor: '#424242' }; // Vàng
+            } else if (aqi <= 150) {
+                return { name: 'Không lành mạnh cho nhóm nhạy cảm', color: '#fb8c00', textColor: 'white' }; // Cam
+            } else if (aqi <= 200) {
+                return { name: 'Không lành mạnh', color: '#e53935', textColor: 'white' }; // Đỏ
+            } else if (aqi <= 300) {
+                return { name: 'Rất không lành mạnh', color: '#8e24aa', textColor: 'white' }; // Tím
+            } else {
+                return { name: 'Nguy hiểm', color: '#b71c1c', textColor: 'white' }; // Nâu đỏ
+            }
+        }
+        
         // Xử lý form và hiển thị kết quả
         document.getElementById('air-quality-form').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -320,7 +349,8 @@
                 so2_unit: document.getElementById('so2-unit').value,
                 humidity: document.getElementById('humidity').value,
                 temperature: document.getElementById('temperature').value,
-                wind: document.getElementById('wind').value
+                wind: document.getElementById('wind').value,
+                wind_unit: document.getElementById('wind-unit').value // <-- Thêm dòng này
             };
 
             // Gửi dữ liệu đến API
@@ -371,7 +401,7 @@
 
             // Lấy thông tin mức AQI (tên, màu) dựa trên giá trị AQI tính toán
             const aqiLevelInfo = getAqiLevelInfo(calculatedAqi); // Gọi hàm helper
-            const aqiIndicator = document.getElementById('aqi-level-indicator');
+            const aqiIndicator = document.getElementById('risk-level'); // Sửa ID thành 'risk-level'
             aqiIndicator.textContent = aqiLevelInfo.name; // Hiển thị tên mức AQI
             aqiIndicator.style.backgroundColor = aqiLevelInfo.color; // Đặt màu nền
             aqiIndicator.style.color = aqiLevelInfo.textColor; // Đặt màu chữ

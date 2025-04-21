@@ -314,6 +314,10 @@ def predict():
             except (ValueError, TypeError):
                 input_values_raw[feature] = None
 
+        # Lấy đơn vị của gió riêng
+        wind_unit = data.get('wind_unit')
+        input_units['wind'] = wind_unit if wind_unit in ['ms', 'kmh'] else None
+
         # --- Chuẩn bị dữ liệu cho tính toán AQI ---
         # Hàm calculate_aqi cần: pm25, pm10 (ug/m3), no2, o3, so2 (ppb), co (ppm)
         aqi_input = {}
@@ -327,7 +331,7 @@ def predict():
         elif co_raw is not None and co_unit == 'ppm':
             aqi_input['co_ppm'] = co_raw
         else:
-            aqi_input['co_ppm'] = None # Sẽ là None nếu giá trị hoặc đơn vị không hợp lệ
+            aqi_input['co_ppm'] = None
 
         for gas in ['no2', 'o3', 'so2']:
             raw_val = input_values_raw.get(gas)
@@ -337,17 +341,14 @@ def predict():
             elif raw_val is not None and unit == 'ppb':
                 aqi_input[f'{gas}_ppb'] = raw_val
             else:
-                aqi_input[f'{gas}_ppb'] = None # Sẽ là None nếu giá trị hoặc đơn vị không hợp lệ
+                aqi_input[f'{gas}_ppb'] = None
 
         # --- Chuẩn bị dữ liệu cho Pipeline Model ---
-        # Pipeline mong đợi các features theo thứ tự `pipeline_features`
-        # Đơn vị chuẩn cho model (dựa trên notebook): pm25, pm10 (ug/m3), no2, o3, so2 (ppb), co (ppm), humidity(%), temp(C), wind(m/s)
         model_input_values = {}
         model_input_values['pm25'] = input_values_raw.get('pm25')
         model_input_values['pm10'] = input_values_raw.get('pm10')
         model_input_values['humidity'] = input_values_raw.get('humidity')
         model_input_values['temperature'] = input_values_raw.get('temperature')
-        model_input_values['wind'] = input_values_raw.get('wind')
 
         # Chuyển CO về ppm cho model
         if co_raw is not None and co_unit == 'ugm3':
@@ -368,11 +369,23 @@ def predict():
             else:
                 model_input_values[gas] = None
 
+        # Xử lý và chuyển đổi đơn vị gió cho model
+        wind_raw = input_values_raw.get('wind')
+        wind_unit_local = input_units.get('wind')
+        if wind_raw is not None:
+            if wind_unit_local == 'kmh':
+                model_input_values['wind'] = wind_raw / 3.6
+            elif wind_unit_local == 'ms':
+                model_input_values['wind'] = wind_raw
+            else:
+                 model_input_values['wind'] = None
+        else:
+            model_input_values['wind'] = None
+
         # Tạo list giá trị theo đúng thứ tự pipeline_features
         input_for_pipeline_list = []
         for f in pipeline_features:
             val = model_input_values.get(f)
-            # Đảm bảo giá trị là số hoặc NaN, không phải None
             input_for_pipeline_list.append(float(val) if val is not None else np.nan)
 
         print("-" * 20)
@@ -383,13 +396,11 @@ def predict():
         print(f"Values for pipeline prediction (ordered by {pipeline_features}, NaN for missing): {input_for_pipeline_list}")
 
         # --- Tính toán AQI ---
-        # Kiểm tra xem có đủ dữ liệu hợp lệ để tính AQI không
         pollutants_for_aqi_check = [aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'], aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']]
         if not any(p is not None and not math.isnan(p) and not math.isinf(p) for p in pollutants_for_aqi_check):
              calculated_aqi = None
              print("    [predict] Not enough valid pollutant data to calculate AQI.")
         else:
-            # Gọi hàm tính AQI với các giá trị đã chuẩn hóa đơn vị
             calculated_aqi = calculate_aqi(
                 aqi_input['pm25'], aqi_input['pm10'], aqi_input['no2_ppb'],
                 aqi_input['co_ppm'], aqi_input['o3_ppb'], aqi_input['so2_ppb']
@@ -397,21 +408,15 @@ def predict():
         print(f"Calculated AQI result: {calculated_aqi}")
 
         # --- Dự đoán bằng Pipeline ---
-        # Tạo DataFrame đầu vào cho pipeline
         input_df = pd.DataFrame([input_for_pipeline_list], columns=pipeline_features)
 
         try:
-            # Dự đoán mức độ rủi ro (lớp)
             predicted_risk_level = int(pipeline.predict(input_df)[0])
-
-            # Dự đoán xác suất cho các lớp mà model đã học
             risk_probs_learned = pipeline.predict_proba(input_df)[0]
-
-            # Tạo mảng xác suất đầy đủ 6 lớp (0-5)
             risk_probs_full = np.zeros(6)
-            learned_classes = pipeline.classes_ # Lấy các lớp thực tế model đã học (ví dụ: [0, 1, 2, 3])
+            learned_classes = pipeline.classes_
             for i, cls_label in enumerate(learned_classes):
-                 if 0 <= cls_label < 6: # Đảm bảo chỉ số lớp hợp lệ
+                 if 0 <= cls_label < 6:
                      risk_probs_full[int(cls_label)] = risk_probs_learned[i]
 
             print(f"Predicted Risk Level (from model): {predicted_risk_level}")
@@ -427,25 +432,21 @@ def predict():
         print("-" * 20)
 
         # --- Lấy khuyến nghị ---
-        # Khuyến nghị chung, mô tả, ảnh hưởng: Dựa trên MỨC RỦI RO DỰ ĐOÁN TỪ MODEL
         model_recommendations = get_health_recommendations(predicted_risk_level)
-
-        # Khuyến nghị theo nhóm nhạy cảm: Dựa trên CHỈ SỐ AQI TÍNH TOÁN
-        # Sử dụng giá trị 0 nếu AQI không tính được để tránh lỗi
         aqi_for_specific_groups = calculated_aqi if calculated_aqi is not None and not math.isnan(calculated_aqi) else 0
         specific_group_recommendations = get_specific_group_recommendations(aqi_for_specific_groups)
 
         # --- Tạo response ---
         response_data = {
-            'predicted_risk_level': predicted_risk_level, # Mức rủi ro từ model ML
-            'risk_name': model_recommendations['risk_name'], # Tên mức rủi ro theo model ML
-            'description': model_recommendations['description'], # Mô tả theo model ML
-            'health_effects': model_recommendations['health_effects'], # Ảnh hưởng sk theo model ML
-            'recommendations': model_recommendations['recommendations'], # Khuyến nghị chung theo model ML
-            'specific_recommendations': model_recommendations['specific_recommendations'], # Khuyến nghị cụ thể theo model ML
-            'calculated_aqi': round(calculated_aqi, 1) if calculated_aqi is not None else None, # AQI tính toán
-            'risk_probabilities': risk_probs_full.tolist(), # Xác suất đầy đủ 6 lớp từ model ML
-            'specific_group_recommendations': specific_group_recommendations # Khuyến nghị nhóm theo AQI tính toán
+            'predicted_risk_level': predicted_risk_level,
+            'risk_name': model_recommendations['risk_name'],
+            'description': model_recommendations['description'],
+            'health_effects': model_recommendations['health_effects'],
+            'recommendations': model_recommendations['recommendations'],
+            'specific_recommendations': model_recommendations['specific_recommendations'],
+            'calculated_aqi': round(calculated_aqi, 1) if calculated_aqi is not None else None,
+            'risk_probabilities': risk_probs_full.tolist(),
+            'specific_group_recommendations': specific_group_recommendations
         }
 
         return jsonify(response_data)
