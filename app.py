@@ -1,16 +1,18 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify
+from pymongo import MongoClient
+import bcrypt
+import os
+from dotenv import load_dotenv
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pymongo import MongoClient
 from datetime import datetime
-from dotenv import load_dotenv
 import pandas as pd
 import joblib
-import os
-from health_recommendations import get_health_recommendations, get_specific_group_recommendations
 import math
 import numpy as np
+from health_recommendations import get_health_recommendations, get_specific_group_recommendations
+
 
 # Tải biến môi trường từ file .env
 load_dotenv()
@@ -21,7 +23,62 @@ app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')
 client = MongoClient(os.getenv('MONGO_URI', 'mongodb+srv://Khoi:Minhkhoi2204%40%40@khoi.jqf2h.mongodb.net/'))
 db = client['GIS']
 collection = db['DataAQI']
+account_collection = db['Account']
 
+
+# --- ĐĂNG NHẬP/ĐĂNG KÝ ---
+@app.route('/index_admin')
+def index_admin():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('index_admin.html')
+
+@app.route('/index_user')
+def index_user():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('health_evaluation.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        name = request.form['name']
+        password = request.form['password']
+        role = request.form['role']
+
+        if not name or not password or not role:
+            return render_template('register.html', error="Vui lòng điền đầy đủ thông tin")
+
+        if account_collection.find_one({'name': name}):
+            return render_template('register.html', error="Người dùng đã tồn tại")
+
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        account_collection.insert_one({'name': name, 'password': hashed_password, 'role': role})
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        name = request.form['name']
+        password = request.form['password']
+
+        user = account_collection.find_one({'name': name})
+        if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password']):
+            return render_template('login.html', error="Tên đăng nhập hoặc mật khẩu không đúng")
+
+        session['username'] = name
+        if user['role'] == 'admin':
+            return redirect(url_for('index_admin'))
+        return redirect(url_for('index_user'))
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
 
 # Khối lượng mol của các chất ô nhiễm (g/mol)
 MW = {
